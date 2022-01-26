@@ -1,14 +1,14 @@
 module memory(
     input  wire logic        clk,
-    input  wire logic [15:0] i_addr_i,     // instruction port
-    output      logic [15:0] i_data_out_o,
-    input  wire logic [15:0] d_addr_i,     // data port
+    input  wire logic [31:0] i_addr_i,     // instruction port
+    output      logic [31:0] i_data_out_o,
+    input  wire logic [31:0] d_addr_i,     // data port
     input  wire logic        d_we_i,
-    input  wire logic [15:0] d_data_in_i,
-    output      logic [15:0] d_data_out_o
+    input  wire logic [31:0] d_data_in_i,
+    output      logic [31:0] d_data_out_o
     );
 
-    logic [15:0] mem_array[1023:0];
+    logic [31:0] mem_array[1023:0];
 
     initial begin
         $readmemh("program.hex", mem_array);

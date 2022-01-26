@@ -16,7 +16,7 @@ module processor_tb;
         reset = 1'b1;
         #20
         reset = 1'b0;
-        #100
+        #200
         $finish;
     end
 

@@ -3,31 +3,35 @@ module processor(
     input wire logic reset_i
     );
 
-    logic [15:0] d_addr;
-    logic [15:0] d_data_out;
+    logic [31:0] d_addr;
+    logic [31:0] d_data_out;
     logic        d_we;
     logic        d_addr_sel;
 
-    logic [15:0] addr;
+    logic [31:0] addr;
 
-    logic [15:0] reg_in;
-    logic [1:0]  reg_in_sel;
+    logic [31:0] reg_in;
+    logic [4:0]  reg_in_sel;
     logic        reg_in_en;
     logic        reg_in_source;
-    logic [1:0]  reg_out1_sel;
-    logic [1:0]  reg_out2_sel;
-    logic [15:0] reg_out1;
-    logic [15:0] reg_out2;
+    logic [4:0]  reg_out1_sel;
+    logic [4:0]  reg_out2_sel;
+    logic [31:0] reg_out1;
+    logic [31:0] reg_out2;
+    logic [31:0] alu_in2;
 
-    logic        alu_op;
-    logic        z_flag;
-    logic [15:0] alu_out;
+    logic [2:0]  alu_op;
+    logic        alu_op_qual;
+    logic [31:0] alu_out;
+
+    logic [31:0] imm;
+    logic        alu_in2_sel;
 
     logic [1:0]  next_pc_sel;
-    logic [15:0] pc;
-    logic [15:0] next_pc;
+    logic [31:0] pc;
+    logic [31:0] next_pc;
 
-    logic [15:0] instruction;
+    logic [31:0] instruction;
 
     memory memory(
         .clk(clk),
@@ -53,17 +57,17 @@ module processor(
 
     alu alu(
         .clk(clk),
-        .reset_i(reset_i),
         .in1_i(reg_out1),
-        .in2_i(reg_out2),
+        .in2_i(alu_in2),
         .op_i(alu_op),
         .out_o(alu_out),
-        .z_flag_o(z_flag)
+        .op_qual_i(alu_op_qual)
     );
 
     decoder decoder(
-        .instruction_i(instruction),
-        .z_flag_i(z_flag),
+        .instr_i(instruction),
+        .reg_out1_i(reg_out1),
+        .reg_out2_i(reg_out2),
         .next_pc_sel_o(next_pc_sel),
         .reg_in_source_o(reg_in_source),
         .reg_in_sel_o(reg_in_sel),
@@ -71,14 +75,17 @@ module processor(
         .reg_out1_sel_o(reg_out1_sel),
         .reg_out2_sel_o(reg_out2_sel),
         .alu_op_o(alu_op),
+        .alu_op_qual_o(alu_op_qual),
         .d_we_o(d_we),
         .d_addr_sel_o(d_addr_sel),
-        .addr_o(addr)
+        .addr_o(addr),
+        .imm_o(imm),
+        .alu_in2_sel_o(alu_in2_sel)
     );
 
     // PC logic
     always_comb begin
-        next_pc = 16'd0;
+        next_pc = 32'd0;
 
         case (next_pc_sel)
             // from register file
@@ -101,7 +108,7 @@ module processor(
     // PC register
     always_ff @(posedge clk) begin
         if (reset_i) begin
-            pc <= 16'd0;
+            pc <= 32'd0;
         end else begin
             pc <= next_pc;
         end
@@ -112,6 +119,7 @@ module processor(
     always_comb begin
         reg_in = reg_in_source ? d_data_out : alu_out;
         d_addr = d_addr_sel ? reg_out1 : addr;
+        alu_in2 = alu_in2_sel ? imm : reg_out2;
     end
 
 endmodule

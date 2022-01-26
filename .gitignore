@@ -1,3 +1,6 @@
-rtl/tb/processor_tb.out
-rtl/tb/processor_tb.vcd
-rtl/tb/program.hex
+rtl/tb/*.out
+rtl/tb/*.vcd
+rtl/tb/*.hex
+rtl/tb/*.bin
+rtl/tb/*.elf
+rtl/tb/*.lst

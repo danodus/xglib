@@ -1,35 +1,23 @@
 module alu(
     input  wire logic        clk,
-    input  wire logic        reset_i,
-    input  wire logic [15:0] in1_i,
-    input  wire logic [15:0] in2_i,
-    input  wire logic        op_i,
-    output      logic [15:0] out_o,
-    output      logic        z_flag_o
+    input  wire logic [31:0] in1_i,
+    input  wire logic [31:0] in2_i,
+    input  wire logic [2:0]  op_i,
+    input                    op_qual_i, // operation qualification (+/-,logical/arithmetic)
+    output      logic [31:0] out_o
     );
-
-    logic z_flag_next;
-
-    // Z flag register
-    always_ff @(posedge clk) begin
-        if (reset_i) begin
-            z_flag_o <= 1'b0;
-        end else begin
-            z_flag_o <= z_flag_next;
-        end
-    end
 
     // ALU logic
     always_comb begin
-        out_o = 16'd0;
-        z_flag_next = z_flag_o;   // z flag only change when ADD is performed
-
         case (op_i)
-            // op_i == 0 is not mapped
-            1: begin
-                out_o = in1_i + in2_i;
-                z_flag_next = (out_o == 16'd0);
-            end
+            3'b000: out_o = op_qual_i ? in1_i - in2_i : in1_i + in2_i;                        // ADD/SUB
+            3'b010: out_o = ($signed(in1_i) < $signed(in2_i)) ? 32'b1 : 32'b0;                // SLT
+            3'b011: out_o = (in1_i < in2_i) ? 32'b1 : 32'b0;                                  // SLTU
+            3'b100: out_o = in1_i ^ in2_i;                                                    // XOR
+            3'b110: out_o = in1_i | in2_i;                                                    // OR
+            3'b111: out_o = in1_i & in2_i;                                                    // AND
+            3'b001: out_o = in1_i << in2_i[4:0];                                              // SLL
+            3'b101: out_o = $signed({op_qual_i ? in1_i[31] : 1'b0, in1_i}) >>> in2_i[4:0];    // SRL/SRA
         endcase
     end
 
