@@ -3,7 +3,7 @@ module decoder(
     input  wire logic [31:0] reg_out1_i,
     input  wire logic [31:0] reg_out2_i,
     output      logic [1:0]  next_pc_sel_o,
-    output      logic        reg_in_source_o,   // 0: ALU out, 1: memory data out
+    output      logic [1:0]  reg_in_source_o,   // 0: ALU out, 1: memory data out, 2: PC + 4
     output      logic [4:0]  reg_in_sel_o,
     output      logic        reg_in_en_o,
     output      logic [4:0]  reg_out1_sel_o,
@@ -25,7 +25,7 @@ module decoder(
     logic [31:0] s_imm;
     logic [31:0] b_imm;
     logic [31:0] u_imm;
-    //logic [31:0] j_imm = {{12{instr_i[31]}}, instr_i[19:12], instr_i[20], instr_i[30:21], 1'b0};
+    logic [31:0] j_imm;
 
     logic [2:0] branch_predicate;
     logic is_branch_taken;
@@ -39,12 +39,13 @@ module decoder(
         s_imm = {{21{instr_i[31]}}, instr_i[30:25], instr_i[11:7]};
         b_imm = {{20{instr_i[31]}}, instr_i[7], instr_i[30:25], instr_i[11:8], 1'b0};
         u_imm = {instr_i[31:12], {12{1'b0}}};
+        j_imm = {{12{instr_i[31]}}, instr_i[19:12], instr_i[20], instr_i[30:21], 1'b0};
     end
 
     always_comb begin
         next_pc_sel_o   = 2'b00;
         
-        reg_in_source_o = 1'b0;
+        reg_in_source_o = 2'b00;
         reg_in_en_o     = 1'b0;
 
         alu_op_o        = 3'b000;
@@ -74,7 +75,7 @@ module decoder(
                 imm_o           = u_imm;
                 alu_in2_sel_o   = 1'b1;     // immediate value in ALU in2
                 alu_op_o        = 3'b000;   // ALU add operation
-                reg_in_source_o = 1'b0;     // write ALU result to RF
+                reg_in_source_o = 2'b00;    // write ALU result to RF
                 reg_in_en_o     = 1'b1;     // enable write to RF
             end
 
@@ -85,12 +86,22 @@ module decoder(
 
             // JAL
             7'b1101111: begin
-                // TODO
+                reg_in_source_o = 2'b10; // write PC + 4 in RF
+                reg_in_sel_o    = rd;
+                reg_in_en_o     = 1'b1;  // write to RF
+                addr_o          = j_imm;
+                next_pc_sel_o   = 2'b01; // add the addr field to PC
             end
 
             // JALR
             7'b1100111: begin
-                // TODO
+                reg_in_source_o = 2'b10; // write PC + 4 in RF
+                reg_in_sel_o    = rd;
+                reg_in_en_o     = 1'b1;  // write to RF
+                reg_out1_sel_o  = rs1;
+                addr_o          = reg_out1_i + i_imm;
+                addr_o          = {addr_o[31:1], 1'b0};
+                next_pc_sel_o   = 2'b11; // set PC to the addr field
             end
 
             // BEQ, BNE, BLT, BGE, BLTU, BGEU
@@ -98,7 +109,7 @@ module decoder(
                 reg_out1_sel_o = rs1;
                 reg_out2_sel_o = rs2;
 
-                addr_o = $signed(b_imm) >>> 2;
+                addr_o = b_imm;
                 case (instr_i[14:12])
                     // BEQ
                     3'b000:
@@ -156,7 +167,7 @@ module decoder(
                     3'b010: begin
                         d_addr_sel_o    = 1'b0; // use addr as d_addr
                         d_we_o          = 1'b0; // do not write to memory
-                        reg_in_source_o = 1'b1; // write memory data to RF
+                        reg_in_source_o = 2'b01; // write memory data to RF
                         reg_in_en_o     = 1'b1; // enable RF write
                     end
 
@@ -201,7 +212,7 @@ module decoder(
                 reg_in_sel_o    = rd;
                 reg_out1_sel_o  = rs1;
                 alu_op_o        = instr_i[14:12];
-                reg_in_source_o = 1'b0; // write ALU result to RF
+                reg_in_source_o = 2'b00; // write ALU result to RF
                 reg_in_en_o     = 1'b1; // write to RF
                 imm_o           = i_imm;
                 alu_in2_sel_o   = 1'b1; // immediate value in ALU in2
@@ -218,7 +229,7 @@ module decoder(
                 reg_out2_sel_o  = rs2;
                 alu_op_o        = instr_i[14:12];
                 alu_op_qual_o   = instr_i[30];
-                reg_in_source_o = 1'b0; // write ALU result to RF
+                reg_in_source_o = 2'b00; // write ALU result to RF
                 reg_in_en_o     = 1'b1; // write to RF
                 alu_in2_sel_o   = 1'b0; // register out2 in ALU in2
             end

@@ -12,11 +12,11 @@ module processor_tb;
     initial begin
         $dumpfile("processor_tb.vcd");
         $dumpvars(0, UUT);
-
+        $dumpvars(0, UUT.memory.mem_array[256]);
         reset = 1'b1;
         #20
         reset = 1'b0;
-        #200
+        #2000
         $finish;
     end
 

@@ -13,7 +13,7 @@ module processor(
     logic [31:0] reg_in;
     logic [4:0]  reg_in_sel;
     logic        reg_in_en;
-    logic        reg_in_source;
+    logic [1:0]  reg_in_source;
     logic [4:0]  reg_out1_sel;
     logic [4:0]  reg_out2_sel;
     logic [31:0] reg_out1;
@@ -35,7 +35,7 @@ module processor(
 
     memory memory(
         .clk(clk),
-        .i_addr_i(pc),
+        .i_addr_i(pc >> 2),
         .i_data_out_o(instruction),
         .d_addr_i(d_addr),
         .d_we_i(d_we),
@@ -89,7 +89,7 @@ module processor(
 
         case (next_pc_sel)
             // from register file
-            2'b1x: begin
+            2'b10: begin
                 next_pc = reg_out1;
             end
 
@@ -98,9 +98,14 @@ module processor(
                 next_pc = pc + addr;
             end
 
+            // from instruction absolute
+            2'b11: begin
+                next_pc = addr;
+            end
+
             // regular operation, increment
             default: begin
-                next_pc = pc + 16'd1;
+                next_pc = pc + 32'd4;
             end
         endcase
     end
@@ -117,7 +122,7 @@ module processor(
     // extra logic
 
     always_comb begin
-        reg_in = reg_in_source ? d_data_out : alu_out;
+        reg_in = reg_in_source == 2'b01 ? d_data_out : reg_in_source == 2'b10 ? pc + 4 : alu_out;
         d_addr = d_addr_sel ? reg_out1 : addr;
         alu_in2 = alu_in2_sel ? imm : reg_out2;
     end
