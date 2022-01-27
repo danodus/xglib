@@ -1,6 +1,9 @@
 
 void main(void)
 {
-    for (int i = 0; i < 32; i++)
-        *((volatile unsigned int *)(4*1024)) = i;
+    unsigned int counter = 0;
+    for (;;) {
+        *((volatile unsigned int *)(4*1024)) = counter >> 20;
+        counter++;
+    }
 }

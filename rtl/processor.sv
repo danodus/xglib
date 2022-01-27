@@ -36,6 +36,11 @@ module processor(
 
     logic [31:0] instruction;
 
+    enum {
+        FETCH,
+        DECODE
+    } state;
+
     memory memory(
         .clk(clk),
         .i_addr_i(pc >> 2),
@@ -69,6 +74,7 @@ module processor(
     );
 
     decoder decoder(
+        .en_i(state == DECODE),
         .instr_i(instruction),
         .reg_out1_i(reg_out1),
         .reg_out2_i(reg_out2),
@@ -115,15 +121,6 @@ module processor(
         endcase
     end
 
-    // PC register
-    always_ff @(posedge clk) begin
-        if (reset_i) begin
-            pc <= 32'd0;
-        end else begin
-            pc <= next_pc;
-        end
-    end
-
     // extra logic
 
     always_comb begin
@@ -131,6 +128,23 @@ module processor(
         d_addr = d_addr_sel ? reg_out1 : addr;
         alu_in1 = alu_in1_sel ? pc : reg_out1;
         alu_in2 = alu_in2_sel ? imm : reg_out2;
+    end
+
+    always_ff @(posedge clk) begin
+
+        case (state)
+            FETCH:
+                state <= DECODE;
+            DECODE: begin
+                state <= FETCH;
+                pc <= next_pc;
+            end
+        endcase
+
+        if (reset_i) begin
+            state <= FETCH;
+            pc <= 32'd0;
+        end
     end
 
 endmodule

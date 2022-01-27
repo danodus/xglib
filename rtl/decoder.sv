@@ -1,4 +1,5 @@
 module decoder(
+    input  wire logic        en_i,
     input  wire logic [31:0] instr_i,
     input  wire logic [31:0] reg_out1_i,
     input  wire logic [31:0] reg_out2_i,
@@ -67,192 +68,194 @@ module decoder(
         reg_out1_sel_o  = 5'b00000;
         reg_out2_sel_o  = 5'b00000;
 
-        // decode the instruction and assert the relevent control signals
-        case (instr_i[6:0])
+        if (en_i) begin
+            // decode the instruction and assert the relevent control signals
+            case (instr_i[6:0])
 
-            // LUI
-            7'b0110111: begin
-                reg_in_sel_o    = rd;
-                reg_out1_sel_o  = 5'b00000; // zero in ALU in1
-                imm_o           = u_imm;
-                alu_in2_sel_o   = 1'b1;     // immediate value in ALU in2
-                alu_op_o        = 3'b000;   // ALU add operation
-                reg_in_source_o = 2'b00;    // write ALU result to RF
-                reg_in_en_o     = 1'b1;     // enable write to RF
-            end
-
-            // AUIPC
-            7'b0010111: begin
-                reg_in_sel_o    = rd;
-                imm_o           = u_imm;
-                alu_in1_sel_o   = 1'b1;     // PC value in ALU in1
-                alu_in2_sel_o   = 1'b1;     // immediate value in ALU in2
-                alu_op_o        = 3'b000;   // ALU add operation
-                reg_in_source_o = 2'b00;    // write ALU result to RF
-                reg_in_en_o     = 1'b1;     // enable write to RF
-            end
-
-            // JAL
-            7'b1101111: begin
-                reg_in_source_o = 2'b10; // write PC + 4 in RF
-                reg_in_sel_o    = rd;
-                reg_in_en_o     = 1'b1;  // write to RF
-                addr_o          = j_imm;
-                next_pc_sel_o   = 2'b01; // add the addr field to PC
-            end
-
-            // JALR
-            7'b1100111: begin
-                reg_in_source_o = 2'b10; // write PC + 4 in RF
-                reg_in_sel_o    = rd;
-                reg_in_en_o     = 1'b1;  // write to RF
-                reg_out1_sel_o  = rs1;
-                addr_o          = reg_out1_i + i_imm;
-                addr_o          = {addr_o[31:1], 1'b0};
-                next_pc_sel_o   = 2'b11; // set PC to the addr field
-            end
-
-            // BEQ, BNE, BLT, BGE, BLTU, BGEU
-            7'b1100011: begin
-                reg_out1_sel_o = rs1;
-                reg_out2_sel_o = rs2;
-
-                addr_o = b_imm;
-                case (instr_i[14:12])
-                    // BEQ
-                    3'b000:
-                        if (reg_out1_i == reg_out2_i)
-                            is_branch_taken = 1'b1;
-                            
-                    // BNE
-                    3'b001:
-                        if (reg_out1_i != reg_out2_i)
-                            is_branch_taken = 1'b1;
-                    
-                    // BLT
-                    3'b100:
-                        if ($signed(reg_out1_i) < $signed(reg_out2_i))
-                            is_branch_taken = 1'b1;
-
-                    // BGE
-                    3'b101:
-                        if ($signed(reg_out1_i) >= $signed(reg_out2_i))
-                            is_branch_taken = 1'b1;
-
-                    // BLTU
-                    3'b110:
-                        if (reg_out1_i < reg_out2_i)
-                            is_branch_taken = 1'b1;
-                    
-                    // BGEU
-                    3'b111:
-                        if (reg_out1_i >= reg_out2_i)
-                            is_branch_taken = 1'b1;
-                endcase
-
-                if (is_branch_taken)
-                    next_pc_sel_o = 2'b01; // add the addr field to PC
-            end
-
-            // LB, LH, LW, LBU, LHU
-            7'b0000011: begin
-                reg_in_sel_o = rd;                
-                reg_out1_sel_o = rs1;
-
-                addr_o = ($signed(reg_out1_i) + $signed(i_imm)) >>> 2;
-                case (instr_i[14:12])
-                    // LB
-                    3'b000: begin
-                        // TODO
-                    end
-
-                    // LH
-                    3'b001: begin
-                        // TODO
-                    end
-
-                    // LW
-                    3'b010: begin
-                        d_addr_sel_o    = 1'b0; // use addr as d_addr
-                        d_we_o          = 1'b0; // do not write to memory
-                        reg_in_source_o = 2'b01; // write memory data to RF
-                        reg_in_en_o     = 1'b1; // enable RF write
-                    end
-
-                    // LBU
-                    3'b100: begin
-                        // TODO
-                    end
-
-                    // LHU
-                    3'b101: begin
-                        // TODO
-                    end
-                endcase                
-            end
-
-            // SB, SH, SW
-            7'b0100011: begin
-                reg_out1_sel_o = rs1;
-                reg_out2_sel_o = rs2;
-                addr_o = ($signed(reg_out1_i) + $signed(s_imm)) >>> 2;
-                case (instr_i[14:12])
-                    // SB
-                    3'b000: begin
-                        // TODO
-                    end
-
-                    // SH
-                    3'b001: begin
-                        // TODO
-                    end
-
-                    // SW
-                    3'b010: begin
-                        d_addr_sel_o    = 1'b0; // use addr as d_addr
-                        d_we_o          = 1'b1; // write to memory
-                    end
-                endcase
-            end
-
-            // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI
-            7'b0010011: begin
-                reg_in_sel_o    = rd;
-                reg_out1_sel_o  = rs1;
-                alu_op_o        = instr_i[14:12];
-                reg_in_source_o = 2'b00; // write ALU result to RF
-                reg_in_en_o     = 1'b1; // write to RF
-                imm_o           = i_imm;
-                alu_in2_sel_o   = 1'b1; // immediate value in ALU in2
-                // Set opcode qualifier for SRLI and SRAI only
-                if (instr_i[14:12] == 3'b101) begin
-                    alu_op_qual_o   = instr_i[30];
+                // LUI
+                7'b0110111: begin
+                    reg_in_sel_o    = rd;
+                    reg_out1_sel_o  = 5'b00000; // zero in ALU in1
+                    imm_o           = u_imm;
+                    alu_in2_sel_o   = 1'b1;     // immediate value in ALU in2
+                    alu_op_o        = 3'b000;   // ALU add operation
+                    reg_in_source_o = 2'b00;    // write ALU result to RF
+                    reg_in_en_o     = 1'b1;     // enable write to RF
                 end
-            end
 
-            // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
-            7'b0110011: begin
-                reg_in_sel_o    = rd;
-                reg_out1_sel_o  = rs1;
-                reg_out2_sel_o  = rs2;
-                alu_op_o        = instr_i[14:12];
-                alu_op_qual_o   = instr_i[30];
-                reg_in_source_o = 2'b00; // write ALU result to RF
-                reg_in_en_o     = 1'b1; // write to RF
-                alu_in2_sel_o   = 1'b0; // register out2 in ALU in2
-            end
+                // AUIPC
+                7'b0010111: begin
+                    reg_in_sel_o    = rd;
+                    imm_o           = u_imm;
+                    alu_in1_sel_o   = 1'b1;     // PC value in ALU in1
+                    alu_in2_sel_o   = 1'b1;     // immediate value in ALU in2
+                    alu_op_o        = 3'b000;   // ALU add operation
+                    reg_in_source_o = 2'b00;    // write ALU result to RF
+                    reg_in_en_o     = 1'b1;     // enable write to RF
+                end
 
-            // FENCE
-            7'b0001111: begin
-                // TODO
-            end
+                // JAL
+                7'b1101111: begin
+                    reg_in_source_o = 2'b10; // write PC + 4 in RF
+                    reg_in_sel_o    = rd;
+                    reg_in_en_o     = 1'b1;  // write to RF
+                    addr_o          = j_imm;
+                    next_pc_sel_o   = 2'b01; // add the addr field to PC
+                end
 
-            // ECALL, EBREAK
-            7'b1110011: begin
-                // TODO
-            end
-            
-        endcase
+                // JALR
+                7'b1100111: begin
+                    reg_in_source_o = 2'b10; // write PC + 4 in RF
+                    reg_in_sel_o    = rd;
+                    reg_in_en_o     = 1'b1;  // write to RF
+                    reg_out1_sel_o  = rs1;
+                    addr_o          = reg_out1_i + i_imm;
+                    addr_o          = {addr_o[31:1], 1'b0};
+                    next_pc_sel_o   = 2'b11; // set PC to the addr field
+                end
+
+                // BEQ, BNE, BLT, BGE, BLTU, BGEU
+                7'b1100011: begin
+                    reg_out1_sel_o = rs1;
+                    reg_out2_sel_o = rs2;
+
+                    addr_o = b_imm;
+                    case (instr_i[14:12])
+                        // BEQ
+                        3'b000:
+                            if (reg_out1_i == reg_out2_i)
+                                is_branch_taken = 1'b1;
+                                
+                        // BNE
+                        3'b001:
+                            if (reg_out1_i != reg_out2_i)
+                                is_branch_taken = 1'b1;
+                        
+                        // BLT
+                        3'b100:
+                            if ($signed(reg_out1_i) < $signed(reg_out2_i))
+                                is_branch_taken = 1'b1;
+
+                        // BGE
+                        3'b101:
+                            if ($signed(reg_out1_i) >= $signed(reg_out2_i))
+                                is_branch_taken = 1'b1;
+
+                        // BLTU
+                        3'b110:
+                            if (reg_out1_i < reg_out2_i)
+                                is_branch_taken = 1'b1;
+                        
+                        // BGEU
+                        3'b111:
+                            if (reg_out1_i >= reg_out2_i)
+                                is_branch_taken = 1'b1;
+                    endcase
+
+                    if (is_branch_taken)
+                        next_pc_sel_o = 2'b01; // add the addr field to PC
+                end
+
+                // LB, LH, LW, LBU, LHU
+                7'b0000011: begin
+                    reg_in_sel_o = rd;                
+                    reg_out1_sel_o = rs1;
+
+                    addr_o = ($signed(reg_out1_i) + $signed(i_imm)) >>> 2;
+                    case (instr_i[14:12])
+                        // LB
+                        3'b000: begin
+                            // TODO
+                        end
+
+                        // LH
+                        3'b001: begin
+                            // TODO
+                        end
+
+                        // LW
+                        3'b010: begin
+                            d_addr_sel_o    = 1'b0; // use addr as d_addr
+                            d_we_o          = 1'b0; // do not write to memory
+                            reg_in_source_o = 2'b01; // write memory data to RF
+                            reg_in_en_o     = 1'b1; // enable RF write
+                        end
+
+                        // LBU
+                        3'b100: begin
+                            // TODO
+                        end
+
+                        // LHU
+                        3'b101: begin
+                            // TODO
+                        end
+                    endcase                
+                end
+
+                // SB, SH, SW
+                7'b0100011: begin
+                    reg_out1_sel_o = rs1;
+                    reg_out2_sel_o = rs2;
+                    addr_o = ($signed(reg_out1_i) + $signed(s_imm)) >>> 2;
+                    case (instr_i[14:12])
+                        // SB
+                        3'b000: begin
+                            // TODO
+                        end
+
+                        // SH
+                        3'b001: begin
+                            // TODO
+                        end
+
+                        // SW
+                        3'b010: begin
+                            d_addr_sel_o    = 1'b0; // use addr as d_addr
+                            d_we_o          = 1'b1; // write to memory
+                        end
+                    endcase
+                end
+
+                // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI
+                7'b0010011: begin
+                    reg_in_sel_o    = rd;
+                    reg_out1_sel_o  = rs1;
+                    alu_op_o        = instr_i[14:12];
+                    reg_in_source_o = 2'b00; // write ALU result to RF
+                    reg_in_en_o     = 1'b1; // write to RF
+                    imm_o           = i_imm;
+                    alu_in2_sel_o   = 1'b1; // immediate value in ALU in2
+                    // Set opcode qualifier for SRLI and SRAI only
+                    if (instr_i[14:12] == 3'b101) begin
+                        alu_op_qual_o   = instr_i[30];
+                    end
+                end
+
+                // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
+                7'b0110011: begin
+                    reg_in_sel_o    = rd;
+                    reg_out1_sel_o  = rs1;
+                    reg_out2_sel_o  = rs2;
+                    alu_op_o        = instr_i[14:12];
+                    alu_op_qual_o   = instr_i[30];
+                    reg_in_source_o = 2'b00; // write ALU result to RF
+                    reg_in_en_o     = 1'b1; // write to RF
+                    alu_in2_sel_o   = 1'b0; // register out2 in ALU in2
+                end
+
+                // FENCE
+                7'b0001111: begin
+                    // TODO
+                end
+
+                // ECALL, EBREAK
+                7'b1110011: begin
+                    // TODO
+                end
+                
+            endcase
+        end // if enabled
     end
 
 endmodule

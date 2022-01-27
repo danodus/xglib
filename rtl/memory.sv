@@ -23,9 +23,6 @@ module memory(
                 mem_array[d_addr_i[9:0]] <= d_data_in_i;
             end
         end
-    end
-
-    always_comb begin
         d_data_out_o = mem_array[d_addr_i[9:0]];
         i_data_out_o = mem_array[i_addr_i[9:0]];
     end
