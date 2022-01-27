@@ -1,6 +1,7 @@
 module processor(
-    input wire logic clk,
-    input wire logic reset_i
+    input wire logic       clk,
+    input wire logic       reset_i,
+    output     logic [7:0] display_o
     );
 
     logic [31:0] d_addr;
@@ -42,7 +43,8 @@ module processor(
         .d_addr_i(d_addr),
         .d_we_i(d_we),
         .d_data_in_i(reg_out2), // in all instructions, only source register 2 is ever written to memory
-        .d_data_out_o(d_data_out)
+        .d_data_out_o(d_data_out),
+        .display_o(display_o)
     );
 
     register_file register_file(
