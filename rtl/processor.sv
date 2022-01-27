@@ -18,6 +18,7 @@ module processor(
     logic [4:0]  reg_out2_sel;
     logic [31:0] reg_out1;
     logic [31:0] reg_out2;
+    logic [31:0] alu_in1;
     logic [31:0] alu_in2;
 
     logic [2:0]  alu_op;
@@ -25,6 +26,7 @@ module processor(
     logic [31:0] alu_out;
 
     logic [31:0] imm;
+    logic        alu_in1_sel;
     logic        alu_in2_sel;
 
     logic [1:0]  next_pc_sel;
@@ -57,7 +59,7 @@ module processor(
 
     alu alu(
         .clk(clk),
-        .in1_i(reg_out1),
+        .in1_i(alu_in1),
         .in2_i(alu_in2),
         .op_i(alu_op),
         .out_o(alu_out),
@@ -80,6 +82,7 @@ module processor(
         .d_addr_sel_o(d_addr_sel),
         .addr_o(addr),
         .imm_o(imm),
+        .alu_in1_sel_o(alu_in1_sel),
         .alu_in2_sel_o(alu_in2_sel)
     );
 
@@ -124,6 +127,7 @@ module processor(
     always_comb begin
         reg_in = reg_in_source == 2'b01 ? d_data_out : reg_in_source == 2'b10 ? pc + 4 : alu_out;
         d_addr = d_addr_sel ? reg_out1 : addr;
+        alu_in1 = alu_in1_sel ? pc : reg_out1;
         alu_in2 = alu_in2_sel ? imm : reg_out2;
     end
 

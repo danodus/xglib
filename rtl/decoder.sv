@@ -14,6 +14,7 @@ module decoder(
     output      logic        d_addr_sel_o,
     output      logic [31:0] addr_o,
     output      logic [31:0] imm_o,
+    output      logic        alu_in1_sel_o,   // 0: RF out1, 1: PC
     output      logic        alu_in2_sel_o    // 0: RF out2, 1: immediate
     );
 
@@ -57,6 +58,7 @@ module decoder(
         addr_o          = 32'd0;
 
         imm_o           = 32'd0;
+        alu_in1_sel_o   = 1'b0;
         alu_in2_sel_o   = 1'b0;
 
         is_branch_taken = 1'b0;
@@ -81,7 +83,13 @@ module decoder(
 
             // AUIPC
             7'b0010111: begin
-                // TODO
+                reg_in_sel_o    = rd;
+                imm_o           = u_imm;
+                alu_in1_sel_o   = 1'b1;     // PC value in ALU in1
+                alu_in2_sel_o   = 1'b1;     // immediate value in ALU in2
+                alu_op_o        = 3'b000;   // ALU add operation
+                reg_in_source_o = 2'b00;    // write ALU result to RF
+                reg_in_en_o     = 1'b1;     // enable write to RF
             end
 
             // JAL
