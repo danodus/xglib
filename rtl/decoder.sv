@@ -197,7 +197,7 @@ module decoder(
                 7'b0100011: begin
                     reg_out1_sel_o = rs1;
                     reg_out2_sel_o = rs2;
-                    addr_o = ($signed(reg_out1_i) + $signed(s_imm)) >>> 2;
+                    addr_o = reg_out1_i + s_imm;
                     case (instr_i[14:12])
                         // SB
                         3'b000: begin

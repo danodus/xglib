@@ -38,17 +38,16 @@ module processor(
 
     enum {
         FETCH,
-        DECODE
+        DECODE,
+        WRITE
     } state;
 
     memory memory(
         .clk(clk),
-        .i_addr_i(pc >> 2),
-        .i_data_out_o(instruction),
-        .d_addr_i(d_addr),
-        .d_we_i(d_we),
-        .d_data_in_i(reg_out2), // in all instructions, only source register 2 is ever written to memory
-        .d_data_out_o(d_data_out),
+        .addr_i(d_addr >> 2),
+        .we_i(d_we),
+        .data_in_i(reg_out2), // in all instructions, only source register 2 is ever written to memory
+        .data_out_o(d_data_out),
         .display_o(display_o)
     );
 
@@ -125,7 +124,7 @@ module processor(
 
     always_comb begin
         reg_in = reg_in_source == 2'b01 ? d_data_out : reg_in_source == 2'b10 ? pc + 4 : alu_out;
-        d_addr = d_addr_sel ? reg_out1 : addr;
+        d_addr = state == DECODE ? (d_addr_sel ? reg_out1 : addr) : pc;
         alu_in1 = alu_in1_sel ? pc : reg_out1;
         alu_in2 = alu_in2_sel ? imm : reg_out2;
     end
@@ -133,11 +132,16 @@ module processor(
     always_ff @(posedge clk) begin
 
         case (state)
-            FETCH:
+            FETCH: begin
+                instruction <= d_data_out;
                 state <= DECODE;
+            end
             DECODE: begin
-                state <= FETCH;
+                state <= WRITE;
                 pc <= next_pc;
+            end
+            WRITE: begin
+                state <= FETCH;
             end
         endcase
 
