@@ -1,6 +1,6 @@
 module memory(
     input  wire logic        clk,
-    input  wire logic [31:0] addr_i,     // data port
+    input  wire logic [31:0] addr_i,
     input  wire logic        we_i,
     input  wire logic [31:0] data_in_i,
     output      logic [31:0] data_out_o,

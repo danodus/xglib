@@ -1,7 +1,12 @@
 module processor(
     input wire logic       clk,
     input wire logic       reset_i,
-    output     logic [7:0] display_o
+
+    // memory
+    output      logic [31:0] addr_o,
+    output       logic       we_o,
+    input  wire logic [31:0] data_in_i,
+    output      logic [31:0] data_out_o
     );
 
     logic [31:0] d_addr;
@@ -41,15 +46,6 @@ module processor(
         DECODE,
         WRITE
     } state;
-
-    memory memory(
-        .clk(clk),
-        .addr_i(d_addr >> 2),
-        .we_i(d_we),
-        .data_in_i(reg_out2), // in all instructions, only source register 2 is ever written to memory
-        .data_out_o(d_data_out),
-        .display_o(display_o)
-    );
 
     register_file register_file(
         .clk(clk),
@@ -92,6 +88,14 @@ module processor(
         .alu_in1_sel_o(alu_in1_sel),
         .alu_in2_sel_o(alu_in2_sel)
     );
+
+    // memory
+    always_comb begin
+        addr_o     = d_addr >> 2;
+        we_o       = d_we;
+        data_out_o = reg_out2; // in all instructions, only source register 2 is ever written to memory
+        d_data_out = data_in_i;
+    end
 
     // PC logic
     always_comb begin
