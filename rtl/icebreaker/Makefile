@@ -12,6 +12,8 @@ SRC := ../processor.sv \
 		../decoder.sv \
 		../memory.sv \
 		../register_file.sv \
+		../uart.sv \
+		../soc.sv \
 		top.sv
 
 all: top.bin

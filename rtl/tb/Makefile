@@ -8,9 +8,9 @@ OBJCOPY = ${RISCV_TOOLCHAIN_PATH}${RISVC_TOOLCHAIN_PREFIX}objcopy
 CC = ${RISCV_TOOLCHAIN_PATH}${RISVC_TOOLCHAIN_PREFIX}gcc
 
 PROGRAM_SOURCE = start.s program.c
-PROCESSOR_TB_SOURCE = ../alu.sv ../register_file.sv ../memory.sv ../decoder.sv ../processor.sv processor_tb.sv
+SOC_TB_SOURCE = ../alu.sv ../register_file.sv ../memory.sv ../decoder.sv ../processor.sv ../uart.sv ../soc.sv soc_tb.sv
 
-all: program.hex processor_tb.out
+all: program.hex soc_tb.out
 
 firmware: program.hex
 
@@ -26,10 +26,10 @@ program.bin: program.elf
 program.elf: $(PROGRAM_SOURCE)
 	${CC} -Wa,-adhln -nostdlib -O3 -T riscv.ld start.s program.c -o program.elf > program.lst
 
-processor_tb.out: $(PROCESSOR_TB_SOURCE)
-	$(IVERILOG) -g2012 -o processor_tb.out $(PROCESSOR_TB_SOURCE)
+soc_tb.out: $(SOC_TB_SOURCE)
+	$(IVERILOG) -g2012 -o soc_tb.out $(SOC_TB_SOURCE)
 
-run: program.hex processor_tb.out
-	vvp processor_tb.out
+run: program.hex soc_tb.out
+	vvp soc_tb.out
 
 .PHONY: all clean run firmware
