@@ -161,7 +161,7 @@ module decoder(
                     reg_in_sel_o = rd;                
                     reg_out1_sel_o = rs1;
 
-                    addr_o = ($signed(reg_out1_i) + $signed(i_imm)) >>> 2;
+                    addr_o = reg_out1_i + i_imm;
                     case (instr_i[14:12])
                         // LB
                         3'b000: begin
