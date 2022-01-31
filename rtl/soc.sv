@@ -28,6 +28,7 @@ module soc(
 
     // UART
     logic uart_tx_strobe;
+    logic uart_rx_strobe;
 
     logic [7:0] uart_tx_data = 0;
     logic [7:0] uart_rx_data;
@@ -73,6 +74,7 @@ module soc(
         display = 8'd0;
         cpu_data_in = mem_data_out;
         uart_tx_strobe = 1'b0;
+        uart_rx_strobe = 1'b0;
         if (cpu_we) begin
             // write
             case (addr[13:12])
@@ -98,6 +100,7 @@ module soc(
                     // UART
                     if (addr[11:0] == 12'd0) begin
                         // data
+                        uart_rx_strobe = 1'b1;
                         cpu_data_in = {24'd0, uart_rx_data};
                     end else if (addr[11:0] == 12'd4) begin
                         // status
@@ -119,6 +122,12 @@ module soc(
             uart_wr <= 1'b1;
         end else begin
             uart_wr <= 1'b0;
+        end
+
+        if (uart_rx_strobe) begin
+            uart_rd <= 1'b1;
+        end else begin
+            uart_rd <= 1'b0;
         end
     end
     
