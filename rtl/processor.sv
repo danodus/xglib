@@ -44,6 +44,7 @@ module processor(
     enum {
         FETCH,
         DECODE,
+        DECODE2,
         WRITE
     } state;
 
@@ -52,7 +53,7 @@ module processor(
         .reset_i(reset_i),
         .in_i(reg_in),
         .in_sel_i(reg_in_sel),
-        .in_en_i(reg_in_en),
+        .in_en_i(reg_in_en && state == DECODE2),
         .out1_sel_i(reg_out1_sel),
         .out2_sel_i(reg_out2_sel),
         .out1_o(reg_out1),
@@ -69,7 +70,7 @@ module processor(
     );
 
     decoder decoder(
-        .en_i(state == DECODE),
+        .en_i(state == DECODE || state == DECODE2),
         .instr_i(instruction),
         .reg_out1_i(reg_out1),
         .reg_out2_i(reg_out2),
@@ -128,7 +129,7 @@ module processor(
 
     always_comb begin
         reg_in = reg_in_source == 2'b01 ? d_data_out : reg_in_source == 2'b10 ? pc + 4 : alu_out;
-        d_addr = state == DECODE ? (d_addr_sel ? reg_out1 : addr) : pc;
+        d_addr = (state == DECODE || state == DECODE2) ? (d_addr_sel ? reg_out1 : addr) : pc;
         alu_in1 = alu_in1_sel ? pc : reg_out1;
         alu_in2 = alu_in2_sel ? imm : reg_out2;
     end
@@ -141,6 +142,9 @@ module processor(
                 state <= DECODE;
             end
             DECODE: begin
+                state <= DECODE2;
+            end
+            DECODE2: begin
                 state <= WRITE;
                 pc <= next_pc;
             end
