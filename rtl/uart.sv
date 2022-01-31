@@ -41,7 +41,7 @@ module uart #(
     parameter divider = FREQ_MHZ * 1000000 / BAUDS;
    
     logic [3:0] recv_state;
-    logic [$clog2(divider)-1:0] recv_divcnt;   // Counts to divider. Reserve enough bytes !
+    logic [31:0] recv_divcnt;   // Counts to divider. Reserve enough bytes !
     logic [7:0] recv_pattern;
     logic [7:0] recv_buf_data;
     logic recv_buf_valid;
@@ -49,7 +49,7 @@ module uart #(
     logic [9:0] send_pattern;
     logic send_dummy;
     logic [3:0] send_bitcnt;
-    logic [$clog2(divider)-1:0] send_divcnt;   // Counts to divider. Reserve enough bytes !
+    logic [31:0] send_divcnt;   // Counts to divider. Reserve enough bytes !
 
     always_comb begin
         rx_data_o = recv_buf_data;

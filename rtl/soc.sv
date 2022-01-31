@@ -1,3 +1,13 @@
+/*
+    0x00000000 - 0x00000FFF: memory
+    0x00001000 - 0x00001FFF: display
+    0x00002000 - 0x00002FFF: UART (115200-N-8-1)
+        0x0x00002000: Data Register (8 bits)
+        0x0x00002004: Status Register (Read-only)
+            bit 0: busy
+            bit 1: valid
+*/
+
 module soc(
     input  wire logic       clk,
     input  wire logic       reset_i,
@@ -17,14 +27,17 @@ module soc(
     logic display_we;
 
     // UART
-    logic [7:0] uart_tx_data;
+    logic uart_tx_strobe;
+
+    logic [7:0] uart_tx_data = 0;
     logic [7:0] uart_rx_data;
-    logic [7:0] uart_ctrl_rd;
-    logic [7:0] uart_ctrl_wr;
+    logic uart_busy, uart_valid;
+    logic uart_wr = 0;
+    logic uart_rd = 0;
 
     memory memory(
         .clk(clk),
-        .addr_i(addr),
+        .addr_i(addr >> 2),
         .we_i(mem_we),
         .data_in_i(mem_data_in), 
         .data_out_o(mem_data_out)
@@ -44,12 +57,12 @@ module soc(
         .reset_i(reset_i),
         .tx_o(tx_o),
         .rx_i(rx_i),
-        .wr_i(uart_ctrl_wr[0]),
-        .rd_i(uart_ctrl_wr[1]),
+        .wr_i(uart_wr),
+        .rd_i(uart_rd),
         .tx_data_i(uart_tx_data),
         .rx_data_o(uart_rx_data),
-        .busy_o(uart_ctrl_rd[0]),
-        .valid_o(uart_ctrl_rd[1])
+        .busy_o(uart_busy),
+        .valid_o(uart_valid)
     );
 
     // address decoding
@@ -59,19 +72,55 @@ module soc(
         mem_data_in = cpu_data_out;
         display = 8'd0;
         cpu_data_in = mem_data_out;
+        uart_tx_strobe = 1'b0;
         if (cpu_we) begin
-            if (addr[10]) begin
-                display = cpu_data_out[7:0];
-                display_we = 1'b1;
-            end else begin
-                mem_we = 1'b1;
-            end
+            // write
+            case (addr[13:12])
+                2'b01: begin
+                    // display
+                    display_we = 1'b1;
+                end
+                2'b10: begin
+                    // UART
+                    if (addr[11:0] == 12'd0) begin
+                        // data
+                        uart_tx_strobe = 1'b1;
+                    end
+                end
+                default: begin
+                    mem_we = 1'b1;
+                end
+            endcase
+        end else begin
+            // read
+            case (addr[13:12])
+                2'b10: begin
+                    // UART
+                    if (addr[11:0] == 12'd0) begin
+                        // data
+                        cpu_data_in = {24'd0, uart_rx_data};
+                    end else if (addr[11:0] == 12'd4) begin
+                        // status
+                        cpu_data_in = {30'd0, uart_valid, uart_busy};
+                    end
+                end
+            endcase
         end
     end
 
     always @(posedge clk) begin
         if (display_we)
-            display_o <= display; 
+            display_o <= cpu_data_out[7:0];
     end
+
+    always @(posedge clk) begin
+        if (uart_tx_strobe) begin
+            uart_tx_data <= cpu_data_out[7:0];
+            uart_wr <= 1'b1;
+        end else begin
+            uart_wr <= 1'b0;
+        end
+    end
+    
 
 endmodule

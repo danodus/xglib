@@ -91,7 +91,7 @@ module processor(
 
     // memory
     always_comb begin
-        addr_o     = d_addr >> 2;
+        addr_o     = d_addr;
         we_o       = d_we;
         data_out_o = reg_out2; // in all instructions, only source register 2 is ever written to memory
         d_data_out = data_in_i;
