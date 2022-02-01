@@ -24,7 +24,7 @@ program.bin: program.elf
 	${OBJCOPY} -O binary program.elf program.bin
 
 program.elf: $(PROGRAM_SOURCE)
-	${CC} -Wa,-adhln -nostdlib -O3 -T riscv.ld start.s program.c -o program.elf > program.lst
+	${CC} -fverbose-asm -Wa,-adhln -nostdlib -O3 -T program.ld start.s program.c -o program.elf > program.lst
 
 soc_tb.out: $(SOC_TB_SOURCE)
 	$(IVERILOG) -g2012 -o soc_tb.out $(SOC_TB_SOURCE)

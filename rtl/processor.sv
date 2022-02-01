@@ -41,6 +41,8 @@ module processor(
 
     logic [31:0] instruction;
 
+    logic [31:0] mask;
+
     enum {
         FETCH,
         DECODE,
@@ -87,7 +89,8 @@ module processor(
         .addr_o(addr),
         .imm_o(imm),
         .alu_in1_sel_o(alu_in1_sel),
-        .alu_in2_sel_o(alu_in2_sel)
+        .alu_in2_sel_o(alu_in2_sel),
+        .mask_o(mask)
     );
 
     // memory
@@ -128,8 +131,8 @@ module processor(
     // extra logic
 
     always_comb begin
-        reg_in = reg_in_source == 2'b01 ? d_data_out : reg_in_source == 2'b10 ? pc + 4 : alu_out;
         d_addr = (state == DECODE || state == DECODE2) ? (d_addr_sel ? reg_out1 : addr) : pc;
+        reg_in = reg_in_source == 2'b01 ? ((d_data_out >> (8 * (d_addr & 2'b11))) & mask) : reg_in_source == 2'b10 ? pc + 4 : alu_out;
         alu_in1 = alu_in1_sel ? pc : reg_out1;
         alu_in2 = alu_in2_sel ? imm : reg_out2;
     end

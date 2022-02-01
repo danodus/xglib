@@ -6,16 +6,14 @@
 #define REG_WRITE(_reg_, _value_) (*((volatile unsigned int *)(_reg_)) = _value_)
 #define REG_READ(_reg_)           (*((volatile unsigned int *)(_reg_)))
 
-const unsigned int s[] = {
-    'H','e','l','l','o',',',' ','w','o','r','l','d','!','\r','\n',0
-};
+const char *s = "Hello, world!\r\n";
 
 void main(void)
 {
     unsigned int counter = 0;
 
     for (;;) {
-        const unsigned int *s2 = s;
+        const char *s2 = s;
         while (*s2) {
             
             while(REG_READ(UART_STATUS) & 1);
