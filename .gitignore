@@ -4,8 +4,8 @@ rtl/tb/*.hex
 rtl/tb/*.bin
 rtl/tb/*.elf
 rtl/tb/*.lst
-rtl/icebreaker/*.log
-rtl/icebreaker/*.hex
-rtl/icebreaker/*.asc
-rtl/icebreaker/*.bin
-rtl/icebreaker/*.json
+rtl/**/*.log
+rtl/**/*.hex
+rtl/**/*.asc
+rtl/**/*.bin
+rtl/**/*.json

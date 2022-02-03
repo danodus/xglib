@@ -1,14 +1,17 @@
 /*
     0x00000000 - 0x00000FFF: memory
     0x00001000 - 0x00001FFF: display
-    0x00002000 - 0x00002FFF: UART (115200-N-8-1)
+    0x00002000 - 0x00002FFF: UART (BAUDS-N-8-1)
         0x0x00002000: Data Register (8 bits)
         0x0x00002004: Status Register (Read-only)
             bit 0: busy
             bit 1: valid
 */
 
-module soc(
+module soc #(
+    parameter FREQ_MHZ = 12,
+    parameter BAUDS    = 115200
+    ) (
     input  wire logic       clk,
     input  wire logic       reset_i,
     output      logic [7:0] display_o,
@@ -56,7 +59,10 @@ module soc(
         .wr_mask_o(wr_mask)
     );
 
-    uart uart(
+    uart #(
+        .FREQ_MHZ(FREQ_MHZ),
+        .BAUDS(BAUDS)
+    ) uart(
         .clk(clk),
         .reset_i(reset_i),
         .tx_o(tx_o),

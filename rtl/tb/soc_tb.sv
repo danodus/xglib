@@ -5,7 +5,10 @@ module soc_tb;
     logic reset;
     logic [7:0] display;
 
-    soc soc(
+    soc #(
+        .FREQ_MHZ(1),
+        .BAUDS(115200)
+    ) soc(
         .clk(clk),
         .reset_i(reset),
         .display_o(display),

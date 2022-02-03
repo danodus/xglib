@@ -13,7 +13,10 @@ module top(
 
     logic [7:0] display;
 
-    soc soc(
+    soc #(
+        .FREQ_MHZ(12),
+        .BAUDS(115200)
+    ) soc(
         .clk(CLK),
         .reset_i(reset),
         .display_o(display),
