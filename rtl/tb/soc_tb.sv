@@ -20,7 +20,7 @@ module soc_tb;
         reset = 1'b1;
         #20
         reset = 1'b0;
-        #40000
+        #100000
         $finish;
     end
 

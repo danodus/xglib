@@ -4,7 +4,8 @@ module processor(
 
     // memory
     output      logic [31:0] addr_o,
-    output       logic       we_o,
+    output      logic       we_o,
+    output      logic [3:0]  wr_mask_o,
     input  wire logic [31:0] data_in_i,
     output      logic [31:0] data_out_o
     );
@@ -41,7 +42,7 @@ module processor(
 
     logic [31:0] instruction;
 
-    logic [31:0] mask;
+    logic [3:0]  mask;
 
     enum {
         FETCH,
@@ -97,7 +98,9 @@ module processor(
     always_comb begin
         addr_o     = d_addr;
         we_o       = d_we;
-        data_out_o = reg_out2; // in all instructions, only source register 2 is ever written to memory
+        // in all instructions, only source register 2 is ever written to memory
+        data_out_o = reg_out2 << (8 * (d_addr & 2'b11));
+        wr_mask_o  = mask << (d_addr & 2'b11);
         d_data_out = data_in_i;
     end
 
@@ -132,7 +135,7 @@ module processor(
 
     always_comb begin
         d_addr = (state == DECODE || state == DECODE2) ? (d_addr_sel ? reg_out1 : addr) : pc;
-        reg_in = reg_in_source == 2'b01 ? ((d_data_out >> (8 * (d_addr & 2'b11))) & mask) : reg_in_source == 2'b10 ? pc + 4 : alu_out;
+        reg_in = reg_in_source == 2'b01 ? ((d_data_out >> (8 * (d_addr & 2'b11))) & {{8{mask[3]}},{8{mask[2]}},{8{mask[1]}},{8{mask[0]}}}) : reg_in_source == 2'b10 ? pc + 4 : alu_out;
         alu_in1 = alu_in1_sel ? pc : reg_out1;
         alu_in2 = alu_in2_sel ? imm : reg_out2;
     end

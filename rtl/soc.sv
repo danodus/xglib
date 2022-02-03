@@ -21,6 +21,7 @@ module soc(
     logic        mem_we, cpu_we;
     logic [31:0] mem_data_in, cpu_data_in;
     logic [31:0] mem_data_out, cpu_data_out;
+    logic [3:0]  wr_mask;
 
     // display
     logic [7:0] display;
@@ -40,6 +41,7 @@ module soc(
         .clk(clk),
         .addr_i(addr >> 2),
         .we_i(mem_we),
+        .wr_mask_i(wr_mask),
         .data_in_i(mem_data_in), 
         .data_out_o(mem_data_out)
     );
@@ -50,7 +52,8 @@ module soc(
         .addr_o(addr),
         .we_o(cpu_we),
         .data_in_i(cpu_data_in),
-        .data_out_o(cpu_data_out)
+        .data_out_o(cpu_data_out),
+        .wr_mask_o(wr_mask)
     );
 
     uart uart(
