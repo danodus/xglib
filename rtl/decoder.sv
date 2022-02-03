@@ -17,7 +17,8 @@ module decoder(
     output      logic [31:0] imm_o,
     output      logic        alu_in1_sel_o,   // 0: RF out1, 1: PC
     output      logic        alu_in2_sel_o,   // 0: RF out2, 1: immediate
-    output      logic [3:0]  mask_o
+    output      logic [3:0]  mask_o,
+    output      logic        sext_o
     );
 
     logic [4:0] rd;
@@ -70,6 +71,7 @@ module decoder(
         reg_out2_sel_o  = 5'b00000;
 
         mask_o          = 4'b1111;
+        sext_o          = 1'b0;
 
         if (en_i) begin
             // decode the instruction and assert the relevent control signals
@@ -168,12 +170,22 @@ module decoder(
                     case (instr_i[14:12])
                         // LB
                         3'b000: begin
-                            // TODO
+                            d_addr_sel_o    = 1'b0; // use addr as d_addr
+                            d_we_o          = 1'b0; // do not write to memory
+                            reg_in_source_o = 2'b01; // write memory data to RF
+                            reg_in_en_o     = 1'b1; // enable RF write
+                            mask_o          = 4'b0001;
+                            sext_o          = 1'b1;
                         end
 
                         // LH
                         3'b001: begin
-                            // TODO
+                            d_addr_sel_o    = 1'b0; // use addr as d_addr
+                            d_we_o          = 1'b0; // do not write to memory
+                            reg_in_source_o = 2'b01; // write memory data to RF
+                            reg_in_en_o     = 1'b1; // enable RF write
+                            mask_o          = 4'b0011;
+                            sext_o          = 1'b1;
                         end
 
                         // LW

@@ -43,6 +43,9 @@ module processor(
     logic [31:0] instruction;
 
     logic [3:0]  mask;
+    logic        sext;
+
+    logic [31:0] d_data_out_ext;
 
     enum {
         FETCH,
@@ -91,7 +94,8 @@ module processor(
         .imm_o(imm),
         .alu_in1_sel_o(alu_in1_sel),
         .alu_in2_sel_o(alu_in2_sel),
-        .mask_o(mask)
+        .mask_o(mask),
+        .sext_o(sext)
     );
 
     // memory
@@ -134,8 +138,29 @@ module processor(
     // extra logic
 
     always_comb begin
+        d_data_out_ext = d_data_out >> (8 * (d_addr & 2'b11));
+
+        case (mask)
+            // LB or LBU
+            4'b0001:
+                if (sext) begin
+                    d_data_out_ext = {{24{d_data_out_ext[7]}}, d_data_out_ext[7:0]};
+                end else begin
+                    d_data_out_ext = d_data_out_ext & 32'h000000FF;
+                end
+            // LH or LHU
+            4'b0011:
+                if (sext) begin
+                    d_data_out_ext = {{16{d_data_out_ext[15]}}, d_data_out_ext[15:0]};
+                end else begin
+                    d_data_out_ext = d_data_out_ext & 32'h0000FFFF;
+                end
+        endcase
+    end
+
+    always_comb begin
         d_addr = (state == DECODE || state == DECODE2) ? (d_addr_sel ? reg_out1 : addr) : pc;
-        reg_in = reg_in_source == 2'b01 ? ((d_data_out >> (8 * (d_addr & 2'b11))) & {{8{mask[3]}},{8{mask[2]}},{8{mask[1]}},{8{mask[0]}}}) : reg_in_source == 2'b10 ? pc + 4 : alu_out;
+        reg_in = reg_in_source == 2'b01 ? d_data_out_ext : reg_in_source == 2'b10 ? pc + 4 : alu_out;
         alu_in1 = alu_in1_sel ? pc : reg_out1;
         alu_in2 = alu_in2_sel ? imm : reg_out2;
     end
