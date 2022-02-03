@@ -92,12 +92,8 @@ module register_file(
                 if (in_sel_i != 0)
                     regs[in_sel_i] <= in_i;
             end
+            out1_o = regs[out1_sel_i];
+            out2_o = regs[out2_sel_i];
         end
-    end
-
-    // output registers
-    always_comb begin
-        out1_o = regs[out1_sel_i];
-        out2_o = regs[out2_sel_i];
     end
 endmodule
