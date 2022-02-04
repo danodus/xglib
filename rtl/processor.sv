@@ -102,7 +102,7 @@ module processor(
     // memory
     always_comb begin
         addr_o     = d_addr;
-        we_o       = d_we;
+        we_o       = (state == DECODE3) && d_we;
         // in all instructions, only source register 2 is ever written to memory
         data_out_o = reg_out2 << (8 * (d_addr & 2'b11));
         wr_mask_o  = mask << (d_addr & 2'b11);
