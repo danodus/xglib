@@ -1,7 +1,7 @@
 YOSYS := yosys
 ICEPACK := icepack
 NEXTPNR := nextpnr-ice40
-TINYPROG := tinyprog
+TINYPROG := tinyfpgab
 
 DEVICE := lp8k
 PACKAGE := cm81
@@ -32,6 +32,6 @@ top.bin: top.asc
 	$(ICEPACK) -s top.asc top.bin
 
 prog: top.bin
-	$(TINYPROG) top.bin
+	$(TINYPROG) -p top.bin
 
 .PHONY: all prog
