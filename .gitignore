@@ -1,11 +1,1 @@
-rtl/tb/*.out
-rtl/tb/*.vcd
-rtl/tb/*.hex
-rtl/tb/*.bin
-rtl/tb/*.elf
-rtl/tb/*.lst
-rtl/**/*.log
-rtl/**/*.hex
-rtl/**/*.asc
-rtl/**/*.bin
-rtl/**/*.json
+
