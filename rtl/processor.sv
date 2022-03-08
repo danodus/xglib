@@ -57,7 +57,6 @@ module processor(
 
     register_file register_file(
         .clk(clk),
-        .reset_i(reset_i),
         .in_i(reg_in),
         .in_sel_i(reg_in_sel),
         .in_en_i(reg_in_en && state == DECODE3),

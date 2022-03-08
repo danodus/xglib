@@ -1,6 +1,5 @@
 module register_file(
     input  wire logic        clk,
-    input  wire logic        reset_i,
     input  wire logic [31:0] in_i,       // data for write back register
     input  wire logic [4:0]  in_sel_i,   // register number to write back to
     input  wire logic        in_en_i,    // don't actually write back unless asserted
@@ -46,6 +45,11 @@ module register_file(
 
     logic [31:0] regs[31:0];
 
+    initial begin
+        for (integer i = 0; i < 32; i = i + 1)
+            regs[i] = 32'd0;
+    end
+
     always_comb begin
         dbg_x0 = regs[0];
         dbg_x1 = regs[1];
@@ -83,17 +87,11 @@ module register_file(
 
     // actual register file storage
     always_ff @(posedge clk) begin
-        if (reset_i) begin
-            for (integer i = 0; i < 32; i = i + 1)
-                regs[i] <= 32'd0;
+        if (in_en_i) begin
+            if (in_sel_i != 0)
+                regs[in_sel_i] <= in_i;
         end
-        else begin
-            if (in_en_i) begin
-                if (in_sel_i != 0)
-                    regs[in_sel_i] <= in_i;
-            end
-            out1_o = regs[out1_sel_i];
-            out2_o = regs[out2_sel_i];
-        end
+        out1_o = regs[out1_sel_i];
+        out2_o = regs[out2_sel_i];
     end
 endmodule
