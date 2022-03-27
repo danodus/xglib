@@ -1,3 +1,7 @@
+// alu.sv
+// Copyright (c) 2022 Daniel Cliche
+// SPDX-License-Identifier: MIT
+
 module alu(
     input  wire logic        clk,
     input  wire logic [31:0] in1_i,

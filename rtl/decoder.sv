@@ -1,3 +1,7 @@
+// decoder.sv
+// Copyright (c) 2022 Daniel Cliche
+// SPDX-License-Identifier: MIT
+
 module decoder(
     input  wire logic        en_i,
     input  wire logic [31:0] instr_i,

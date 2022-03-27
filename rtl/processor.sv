@@ -1,3 +1,7 @@
+// processor.sv
+// Copyright (c) 2022 Daniel Cliche
+// SPDX-License-Identifier: MIT
+
 module processor(
     input wire logic       clk,
     input wire logic       reset_i,

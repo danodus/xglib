@@ -1,3 +1,7 @@
+// register_file.sv
+// Copyright (c) 2022 Daniel Cliche
+// SPDX-License-Identifier: MIT
+
 module register_file(
     input  wire logic        clk,
     input  wire logic [31:0] in_i,       // data for write back register
