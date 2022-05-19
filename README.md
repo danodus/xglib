@@ -1,8 +1,11 @@
-# CPU
+# XGLib
 
-FPGA based RISC-V central processing unit (RV32I)
+- RISC-V processing unit (RV32I)
+- SDRAM controller
+- FIFO
+- Frame buffer
 
-# Getting Started
+# RISC-V Processing Unit
 
 ## Requirements
 
@@ -10,5 +13,5 @@ FPGA based RISC-V central processing unit (RV32I)
 
 ## Getting Started
 
-See system on chip project here: https://github.com/dcliche/soc.git
+See system on chip project here: https://github.com/dcliche/xgsoc.git
 
