@@ -337,9 +337,6 @@ module async_sdram_ctrl #(
 
             WRITE_FIFO_DATA_BURST: begin
                 if (!data_burst_full) begin
-`ifndef SYNTHESIS                    
-                    data_burst_d   <= (addr == 0 || addr == 128) ? 128'hF111_F222_F333_F444_F555_F666_F777_F888 : 128'hF00F_F00F_F00F_F00F_F00F_F00F_F00F_F00F;
-`endif                    
                     data_burst_enq <= 1'b1;
                     state          <= WAIT_CMD;
                 end
