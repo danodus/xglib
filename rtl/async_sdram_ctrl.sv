@@ -155,11 +155,7 @@ module async_sdram_ctrl #(
 
     sdram_ctrl #(
         .CLK_FREQ_MHZ(SDRAM_CLK_FREQ_MHZ),     // sdram_clk freq in MHZ
-`ifdef SYNTHESIS
         .POWERUP_DELAY(200),    // power up delay in us
-`else
-        .POWERUP_DELAY(0),    // power up delay in us
-`endif
         .REFRESH_MS(64),        // time to wait between refreshes in ms (0 = disable)
         .BURST_LENGTH(8),       // 0, 1, 2, 4 or 8 (0 = full page)
         .ROW_WIDTH(13),         // Row width
@@ -212,12 +208,12 @@ module async_sdram_ctrl #(
             WAIT_CMD: begin
                 data_enq   <= 1'b0;
                 data_burst_enq <= 1'b0;
-                if (!cmd_reader_empty) begin
-                    cmd_reader_deq <= 1'b1;
-                    state          <= PROCESS_CMD;
-                end else if (!cmd_burst_reader_empty && !data_burst_alm_full) begin
+                if (!cmd_burst_reader_empty && !data_burst_alm_full) begin
                     cmd_burst_reader_deq <= 1'b1;
                     state          <= PROCESS_BURST_CMD;
+                end else if (!cmd_reader_empty) begin
+                    cmd_reader_deq <= 1'b1;
+                    state          <= PROCESS_CMD;
                 end
             end
 
