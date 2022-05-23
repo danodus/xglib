@@ -58,7 +58,7 @@ module framebuffer #(
 
     logic [2:0]     burst_word_counter;
     logic [127:0]   current_burst_data, new_burst_data;
-    logic [23:0]    burst_address;
+    logic [23:0]    stream_base_address, burst_address;
     logic           req_burst_preload;
     logic           req_burst_read;
     logic [15:0]    preload_counter;
@@ -76,6 +76,7 @@ module framebuffer #(
             burst_word_counter <= 3'd0;
             current_burst_data <= 128'd0;
             new_burst_data     <= 128'd0;
+            stream_base_address <= stream_base_address_i;
             burst_address      <= stream_base_address_i;
             req_burst_preload  <= 1'b0;
             req_burst_read     <= 1'b0;
@@ -84,6 +85,7 @@ module framebuffer #(
 
         end else begin
             if (stream_start_frame_i) begin
+                stream_base_address <= stream_base_address_i;
                 burst_address  <= stream_base_address_i;
                 burst_word_counter <= 3'd1;
                 req_burst_preload <= 1'b1;
@@ -116,7 +118,7 @@ module framebuffer #(
                             writer_burst_d <= {8'd0, burst_address};
                             writer_burst_enq <= 1'b1;
 
-                            if (burst_address < stream_base_address_i + FB_SIZE - 8)
+                            if (burst_address < stream_base_address + FB_SIZE - 8)
                                 burst_address <= burst_address + 8;
 
                             state <= WAIT_BURST;
@@ -233,7 +235,7 @@ module framebuffer #(
                     if (!writer_burst_full) begin
                         writer_burst_d <= {8'd0, burst_address};
                         writer_burst_enq <= 1'b1;
-                        if (burst_address < stream_base_address_i + FB_SIZE - 8)
+                        if (burst_address < stream_base_address + FB_SIZE - 8)
                             burst_address <= burst_address + 8;
                         state <= PRELOAD3;
                     end
