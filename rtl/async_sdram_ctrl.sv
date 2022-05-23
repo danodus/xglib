@@ -135,7 +135,7 @@ module async_sdram_ctrl #(
     );
 
     async_fifo #(
-        .ADDR_LEN(6),
+        .ADDR_LEN(8),
         .DATA_WIDTH(128)
     ) data_burst_async_fifo(
         .reader_clk(reader_clk),
