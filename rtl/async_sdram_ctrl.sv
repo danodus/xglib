@@ -27,6 +27,11 @@ module async_sdram_ctrl #(
     output      logic                  writer_full_o,
     output      logic                  writer_alm_full_o,
 
+    input  wire logic [40:0]           writer_ch2_d_i,
+    input  wire logic                  writer_ch2_enq_i,    // enqueue
+    output      logic                  writer_ch2_full_o,
+    output      logic                  writer_ch2_alm_full_o,
+
     input  wire logic [31:0]           writer_burst_d_i,
     input  wire logic                  writer_burst_enq_i,    // enqueue
     output      logic                  writer_burst_full_o,
@@ -41,6 +46,11 @@ module async_sdram_ctrl #(
     input  wire logic                  reader_deq_i,    // dequeue
     output      logic                  reader_empty_o,
     output      logic                  reader_alm_empty_o,
+
+    output      logic [15:0]           reader_ch2_q_o,
+    input  wire logic                  reader_ch2_deq_i,    // dequeue
+    output      logic                  reader_ch2_empty_o,
+    output      logic                  reader_ch2_alm_empty_o,
 
     // Reader burst (output)
     output      logic [127:0]          reader_burst_q_o,
@@ -63,6 +73,10 @@ module async_sdram_ctrl #(
     logic cmd_reader_deq;
     logic cmd_reader_empty, cmd_reader_alm_empty;
 
+    logic [40:0] cmd_ch2_reader_q;
+    logic cmd_ch2_reader_deq;
+    logic cmd_ch2_reader_empty, cmd_ch2_reader_alm_empty;
+
     logic [31:0] cmd_burst_reader_q;
     logic cmd_burst_reader_deq;
     logic cmd_burst_reader_empty, cmd_burst_reader_alm_empty;
@@ -71,6 +85,11 @@ module async_sdram_ctrl #(
     logic data_enq;
     logic data_full;
     logic data_alm_full;
+
+    logic [15:0] data_ch2_d;  // data to enqueue in the output FIFO
+    logic data_ch2_enq;
+    logic data_ch2_full;
+    logic data_ch2_alm_full;
 
     logic [127:0] data_burst_d;  // data to enqueue in the burst output FIFO
     logic data_burst_enq;
@@ -94,6 +113,25 @@ module async_sdram_ctrl #(
         .writer_enq_i(writer_enq_i),
         .writer_full_o(writer_full_o),
         .writer_alm_full_o(writer_alm_full_o)
+    );
+
+    async_fifo #(
+        .ADDR_LEN(10),
+        .DATA_WIDTH(41)
+    ) cmd_ch2_async_fifo(
+        .reader_clk(sdram_clk),
+        .reader_rst_i(sdram_rst),
+        .reader_q_o(cmd_ch2_reader_q),
+        .reader_deq_i(cmd_ch2_reader_deq),
+        .reader_empty_o(cmd_ch2_reader_empty),
+        .reader_alm_empty_o(cmd_ch2_reader_alm_empty),
+
+        .writer_clk(writer_clk),
+        .writer_rst_i(writer_rst_i),
+        .writer_d_i(writer_ch2_d_i),
+        .writer_enq_i(writer_ch2_enq_i),
+        .writer_full_o(writer_ch2_full_o),
+        .writer_alm_full_o(writer_ch2_alm_full_o)
     );
 
     async_fifo #(
@@ -132,6 +170,25 @@ module async_sdram_ctrl #(
         .writer_enq_i(data_enq),
         .writer_full_o(data_full),
         .writer_alm_full_o(data_alm_full)
+    );
+
+    async_fifo #(
+        .ADDR_LEN(10),
+        .DATA_WIDTH(16)
+    ) data_ch2_async_fifo(
+        .reader_clk(reader_clk),
+        .reader_rst_i(reader_rst_i),
+        .reader_q_o(reader_ch2_q_o),
+        .reader_deq_i(reader_ch2_deq_i),
+        .reader_empty_o(reader_ch2_empty_o),
+        .reader_alm_empty_o(reader_ch2_alm_empty_o),
+
+        .writer_clk(sdram_clk),
+        .writer_rst_i(sdram_rst),
+        .writer_d_i(data_ch2_d),
+        .writer_enq_i(data_ch2_enq),
+        .writer_full_o(data_ch2_full),
+        .writer_alm_full_o(data_ch2_alm_full)
     );
 
     async_fifo #(
@@ -196,7 +253,7 @@ module async_sdram_ctrl #(
     assign dq_i  = dq_io;
     assign dq_io = dq_oe ? dq_o : 16'hZZZZ;
 
-    enum { WAIT_CMD, WAIT_CMD_0, WAIT_CMD_1, PROCESS_CMD, PROCESS_BURST_CMD, WRITE, WAIT_SC_WRITE, WRITE_DELAY, READ, READ_SINGLE, READ_BURST, WRITE_FIFO_DATA,
+    enum { WAIT_CMD, WAIT_CMD_0, WAIT_CMD_1, PROCESS_CMD, PROCESS_CH2_CMD, PROCESS_BURST_CMD, WRITE, WAIT_SC_WRITE, WRITE_DELAY, READ, READ_CH2, READ_SINGLE, READ_SINGLE_CH2, READ_BURST, WRITE_FIFO_DATA, WRITE_FIFO_DATA_CH2,
     READ_BURST_0, READ_BURST_1, READ_BURST_2, READ_BURST_3, READ_BURST_4, READ_BURST_5, READ_BURST_6, READ_BURST_7,
     WRITE_FIFO_DATA_BURST } state;
 
@@ -207,6 +264,7 @@ module async_sdram_ctrl #(
         case (state)
             WAIT_CMD: begin
                 data_enq   <= 1'b0;
+                data_ch2_enq <= 1'b0;
                 data_burst_enq <= 1'b0;
                 if (!cmd_burst_reader_empty && !data_burst_alm_full) begin
                     cmd_burst_reader_deq <= 1'b1;
@@ -214,6 +272,9 @@ module async_sdram_ctrl #(
                 end else if (!cmd_reader_empty) begin
                     cmd_reader_deq <= 1'b1;
                     state          <= PROCESS_CMD;
+                end else if (!cmd_ch2_reader_empty) begin
+                    cmd_ch2_reader_deq <= 1'b1;
+                    state              <= PROCESS_CH2_CMD;
                 end
             end
 
@@ -222,6 +283,13 @@ module async_sdram_ctrl #(
                 addr       <= cmd_reader_q[39:16];
                 param      <= cmd_reader_q[15:0];
                 state      <= cmd_reader_q[40] ? WRITE : READ;
+            end
+
+            PROCESS_CH2_CMD: begin
+                cmd_ch2_reader_deq <= 1'b0;
+                addr       <= cmd_ch2_reader_q[39:16];
+                param      <= cmd_ch2_reader_q[15:0];
+                state      <= cmd_ch2_reader_q[40] ? WRITE : READ_CH2;
             end
 
             PROCESS_BURST_CMD: begin
@@ -262,6 +330,16 @@ module async_sdram_ctrl #(
                 end
             end
 
+            READ_CH2: begin
+                if (sc_idle) begin
+                    sc_adr_in <= {7'b0, addr, 1'b0};
+                    sc_acc    <= 1'b1;
+                    sc_we     <= 1'b0;
+                    state     <= READ_SINGLE_CH2;
+                end
+            end
+
+
             READ_BURST: begin
                 if (sc_idle) begin
                     sc_adr_in <= {7'b0, addr, 1'b0};
@@ -279,10 +357,25 @@ module async_sdram_ctrl #(
                 end
             end
 
+            READ_SINGLE_CH2: begin
+                if (sc_ack) begin
+                    sc_acc <= 1'b0;
+                    data_ch2_d <= sc_dat_out;
+                    state      <= WRITE_FIFO_DATA_CH2;
+                end
+            end
+
             WRITE_FIFO_DATA: begin
                 if (!data_full) begin
                     data_enq <= 1'b1;
                     state    <= WAIT_CMD;
+                end
+            end
+
+            WRITE_FIFO_DATA_CH2: begin
+                if (!data_ch2_full) begin
+                    data_ch2_enq <= 1'b1;
+                    state        <= WAIT_CMD;
                 end
             end
 
@@ -342,8 +435,10 @@ module async_sdram_ctrl #(
         if (sdram_rst) begin
             state          <= WAIT_CMD;
             data_enq       <= 1'b0;
+            data_ch2_enq   <= 1'b0;
             data_burst_enq <= 1'b0;
             cmd_reader_deq <= 1'b0;
+            cmd_ch2_reader_deq   <= 1'b0;
             cmd_burst_reader_deq <= 1'b0;
             sc_we          <= 1'b0;
             sc_acc         <= 1'b0;

@@ -7,17 +7,19 @@ module processor(
     input wire logic       reset_i,
 
     // memory
+    output      logic        sel_o,
     output      logic [31:0] addr_o,
-    output      logic       we_o,
+    output      logic        we_o,
     output      logic [3:0]  wr_mask_o,
     input  wire logic [31:0] data_in_i,
-    output      logic [31:0] data_out_o
+    output      logic [31:0] data_out_o,
+    input  wire logic        ack_i
     );
 
     logic [31:0] d_addr;
     logic [31:0] d_data_out;
     logic        d_we;
-    logic        d_addr_sel;
+    logic        addr_valid;
 
     logic [31:0] addr;
 
@@ -53,6 +55,7 @@ module processor(
 
     enum {
         FETCH,
+        FETCH2,
         DECODE,
         DECODE2,
         DECODE3,
@@ -93,7 +96,7 @@ module processor(
         .alu_op_o(alu_op),
         .alu_op_qual_o(alu_op_qual),
         .d_we_o(d_we),
-        .d_addr_sel_o(d_addr_sel),
+        .addr_valid_o(addr_valid),
         .addr_o(addr),
         .imm_o(imm),
         .alu_in1_sel_o(alu_in1_sel),
@@ -163,7 +166,7 @@ module processor(
     end
 
     always_comb begin
-        d_addr = (state == DECODE || state == DECODE2 || state == DECODE3) ? (d_addr_sel ? reg_out1 : addr) : pc;
+        d_addr = (state == DECODE || state == DECODE2 || state == DECODE3) ? addr : pc;
         reg_in = reg_in_source == 2'b01 ? d_data_out_ext : reg_in_source == 2'b10 ? pc + 4 : alu_out;
         alu_in1 = alu_in1_sel ? pc : reg_out1;
         alu_in2 = alu_in2_sel ? imm : reg_out2;
@@ -173,18 +176,31 @@ module processor(
 
         case (state)
             FETCH: begin
+                sel_o <= 1'b1;
+                if (ack_i)
+                    state <= FETCH2;
+            end
+            FETCH2: begin
+                sel_o <= 1'b0;
                 instruction <= d_data_out;
+                //$display("PC: %x, Instruction: %x", pc, d_data_out);
                 state <= DECODE;
             end
             DECODE: begin
                 state <= DECODE2;
             end
             DECODE2: begin
+                if (addr_valid)
+                    sel_o <= 1'b1;
+                //$display("reg_in_source: %d, addr: %h, we: %d, data_in: %x, data_out: %x", reg_in_source, addr_o, we_o, data_in_i, data_out_o);
                 state <= DECODE3;
             end
             DECODE3: begin
-                state <= WRITE;
-                pc <= next_pc;
+                if (!sel_o || ack_i) begin
+                    sel_o <= 1'b0;
+                    pc <= next_pc;
+                    state <= WRITE;
+                end
             end
             WRITE: begin
                 state <= FETCH;
@@ -192,8 +208,9 @@ module processor(
         endcase
 
         if (reset_i) begin
+            sel_o <= 1'b0;
             state <= FETCH;
-            pc <= 32'd0;
+            pc    <= 32'd0;
         end
     end
 

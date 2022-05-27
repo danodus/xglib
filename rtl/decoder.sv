@@ -16,7 +16,7 @@ module decoder(
     output      logic [2:0]  alu_op_o,
     output      logic        alu_op_qual_o,
     output      logic        d_we_o,
-    output      logic        d_addr_sel_o,
+    output      logic        addr_valid_o,
     output      logic [31:0] addr_o,
     output      logic [31:0] imm_o,
     output      logic        alu_in1_sel_o,   // 0: RF out1, 1: PC
@@ -59,7 +59,7 @@ module decoder(
         alu_op_o        = 3'b000;
         alu_op_qual_o   = 1'b0;
 
-        d_addr_sel_o    = 1'b0;
+        addr_valid_o    = 1'b0;
         d_we_o          = 1'b0;
 
         addr_o          = 32'd0;
@@ -174,7 +174,7 @@ module decoder(
                     case (instr_i[14:12])
                         // LB
                         3'b000: begin
-                            d_addr_sel_o    = 1'b0; // use addr as d_addr
+                            addr_valid_o    = 1'b1; // address valid
                             d_we_o          = 1'b0; // do not write to memory
                             reg_in_source_o = 2'b01; // write memory data to RF
                             reg_in_en_o     = 1'b1; // enable RF write
@@ -184,7 +184,7 @@ module decoder(
 
                         // LH
                         3'b001: begin
-                            d_addr_sel_o    = 1'b0; // use addr as d_addr
+                            addr_valid_o    = 1'b1; // address valid
                             d_we_o          = 1'b0; // do not write to memory
                             reg_in_source_o = 2'b01; // write memory data to RF
                             reg_in_en_o     = 1'b1; // enable RF write
@@ -194,7 +194,7 @@ module decoder(
 
                         // LW
                         3'b010: begin
-                            d_addr_sel_o    = 1'b0; // use addr as d_addr
+                            addr_valid_o    = 1'b1; // address valid
                             d_we_o          = 1'b0; // do not write to memory
                             reg_in_source_o = 2'b01; // write memory data to RF
                             reg_in_en_o     = 1'b1; // enable RF write
@@ -202,7 +202,7 @@ module decoder(
 
                         // LBU
                         3'b100: begin
-                            d_addr_sel_o    = 1'b0; // use addr as d_addr
+                            addr_valid_o    = 1'b1; // address valid
                             d_we_o          = 1'b0; // do not write to memory
                             reg_in_source_o = 2'b01; // write memory data to RF
                             reg_in_en_o     = 1'b1; // enable RF write
@@ -211,7 +211,7 @@ module decoder(
 
                         // LHU
                         3'b101: begin
-                            d_addr_sel_o    = 1'b0; // use addr as d_addr
+                            addr_valid_o    = 1'b1; // address valid
                             d_we_o          = 1'b0; // do not write to memory
                             reg_in_source_o = 2'b01; // write memory data to RF
                             reg_in_en_o     = 1'b1; // enable RF write
@@ -228,21 +228,21 @@ module decoder(
                     case (instr_i[14:12])
                         // SB
                         3'b000: begin
-                            d_addr_sel_o    = 1'b0; // use addr as d_addr
+                            addr_valid_o    = 1'b1; // address valid
                             d_we_o          = 1'b1; // write to memory
                             mask_o          = 4'b0001;
                         end
 
                         // SH
                         3'b001: begin
-                            d_addr_sel_o    = 1'b0; // use addr as d_addr
+                            addr_valid_o    = 1'b1; // address valid
                             d_we_o          = 1'b1; // write to memory
                             mask_o          = 4'b0011;
                         end
 
                         // SW
                         3'b010: begin
-                            d_addr_sel_o    = 1'b0; // use addr as d_addr
+                            addr_valid_o    = 1'b1; // address valid
                             d_we_o          = 1'b1; // write to memory
                         end
                     endcase

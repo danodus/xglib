@@ -282,6 +282,11 @@ module top(
         .writer_full_o(writer_full),
         .writer_alm_full_o(writer_alm_full),
 
+        .writer_ch2_d_i(41'd0),
+        .writer_ch2_enq_i(1'b0),
+        .writer_ch2_full_o(),
+        .writer_ch2_alm_full_o(),
+
         .writer_burst_d_i(writer_burst_d),
         .writer_burst_enq_i(writer_burst_enq),
         .writer_burst_full_o(writer_burst_full),
@@ -298,6 +303,12 @@ module top(
         .reader_alm_empty_o(reader_alm_empty),
 
         // Reader secondary channel
+        .reader_ch2_q_o(),
+        .reader_ch2_deq_i(1'b0),
+        .reader_ch2_empty_o(),
+        .reader_ch2_alm_empty_o(),
+
+        // Reader burst channel
         .reader_burst_q_o(reader_burst_q),
         .reader_burst_deq_i(reader_burst_deq),
         .reader_burst_empty_o(reader_burst_empty),
