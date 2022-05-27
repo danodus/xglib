@@ -104,25 +104,36 @@ module top(
     assign led[7:4] = 3'd0;
 
     framebuffer #(
-        .SDRAM_CLK_FREQ_MHZ(78),
         .FB_WIDTH(FB_WIDTH),
         .FB_HEIGHT(FB_HEIGHT)
     ) framebuffer(
         .clk_pix(clk_pix),
         .reset_i(reset),
 
-        // SDRAM interface
-        .sdram_rst(reset),
-        .sdram_clk(clk_sdram),
-        .sdram_ba_o(sdram_ba),
-        .sdram_a_o(sdram_a),
-        .sdram_cs_n_o(sdram_csn),
-        .sdram_ras_n_o(sdram_rasn),
-        .sdram_cas_n_o(sdram_casn),
-        .sdram_we_n_o(sdram_wen),
-        .sdram_dq_io(sdram_d),
-        .sdram_dqm_o(sdram_dqm),
-        .sdram_cke_o(sdram_cke),
+        // Memory interface
+    
+        // Writer (input commands)
+        .writer_d_o(writer_d),
+        .writer_enq_o(writer_enq),
+        .writer_full_i(writer_full),
+        .writer_alm_full_i(writer_alm_full),
+
+        .writer_burst_d_o(writer_burst_d),
+        .writer_burst_enq_o(writer_burst_enq),
+        .writer_burst_full_i(writer_burst_full),
+        .writer_burst_alm_full_i(writer_burst_alm_full),
+
+        // Reader single word (output)
+        .reader_q_i(reader_q),
+        .reader_deq_o(reader_deq),
+        .reader_empty_i(reader_empty),
+        .reader_alm_empty_i(reader_alm_empty),
+
+        // Reader burst (output)
+        .reader_burst_q_i(reader_burst_q),
+        .reader_burst_deq_o(reader_burst_deq),
+        .reader_burst_empty_i(reader_burst_empty),
+        .reader_burst_alm_empty_i(reader_burst_alm_empty),
 
         // Framebuffer access
         .ack_o(vram_ack),
@@ -224,5 +235,75 @@ module top(
         .fill_i(btn[1]),
         .fill_square_i(btn[2])
     );
+
+    // -----------------------------------------------------------------------------------------------------------------
+    // SDRAM
+    //
+
+    logic [40:0] writer_d;
+    logic writer_enq;
+    logic writer_full, writer_alm_full;
+
+    logic [31:0] writer_burst_d;
+    logic writer_burst_enq;
+    logic writer_burst_full, writer_burst_alm_full;
+
+    logic [15:0] reader_q;
+    logic reader_deq;
+    logic reader_empty, reader_alm_empty;    
+
+    logic [127:0] reader_burst_q;
+
+    logic reader_burst_deq;
+    logic reader_burst_empty, reader_burst_alm_empty;
+
+    async_sdram_ctrl #(
+        .SDRAM_CLK_FREQ_MHZ(78)
+    ) async_sdram_ctrl(
+        // SDRAM interface
+        .sdram_rst(reset),
+        .sdram_clk(clk_sdram),
+        .ba_o(sdram_ba),
+        .a_o(sdram_a),
+        .cs_n_o(sdram_csn),
+        .ras_n_o(sdram_rasn),
+        .cas_n_o(sdram_casn),
+        .we_n_o(sdram_wen),
+        .dq_io(sdram_d),
+        .dqm_o(sdram_dqm),
+        .cke_o(sdram_cke),
+
+        // Writer (input commands)
+        .writer_clk(clk_pix),
+        .writer_rst_i(reset),
+
+        .writer_d_i(writer_d),
+        .writer_enq_i(writer_enq),
+        .writer_full_o(writer_full),
+        .writer_alm_full_o(writer_alm_full),
+
+        .writer_burst_d_i(writer_burst_d),
+        .writer_burst_enq_i(writer_burst_enq),
+        .writer_burst_full_o(writer_burst_full),
+        .writer_burst_alm_full_o(writer_burst_alm_full),
+
+        // Reader
+        .reader_clk(clk_pix),
+        .reader_rst_i(reset),
+
+        // Reader main channel
+        .reader_q_o(reader_q),
+        .reader_deq_i(reader_deq),
+        .reader_empty_o(reader_empty),
+        .reader_alm_empty_o(reader_alm_empty),
+
+        // Reader secondary channel
+        .reader_burst_q_o(reader_burst_q),
+        .reader_burst_deq_i(reader_burst_deq),
+        .reader_burst_empty_o(reader_burst_empty),
+        .reader_burst_alm_empty_o(reader_burst_alm_empty)
+    );
+
+    assign sdram_clk = clk_sdram;
 
 endmodule
