@@ -4,7 +4,8 @@
 
 module framebuffer #(
     parameter FB_WIDTH              = 128,
-    parameter FB_HEIGHT             = 128
+    parameter FB_HEIGHT             = 128,
+    parameter FB_BASE_ADDR          = 24'h0
 ) (
     input  wire logic                   clk_pix,
     input  wire logic                   reset_i,
@@ -126,7 +127,7 @@ module framebuffer #(
                         // always read data
                         if (!writer_burst_full_i) begin
                             // read burst command
-                            writer_burst_d_o <= {8'd0, burst_address};
+                            writer_burst_d_o <= {8'd0, FB_BASE_ADDR + burst_address};
                             writer_burst_enq_o <= 1'b1;
 
                             if (burst_address < stream_base_address + FB_SIZE - 8)
@@ -154,7 +155,7 @@ module framebuffer #(
                 WRITE0: begin
                     if (!writer_full_i) begin
                         // write command
-                        writer_d_o   <= {1'b1, address_i, data_in_i};
+                        writer_d_o   <= {1'b1, FB_BASE_ADDR + address_i, data_in_i};
                         writer_enq_o <= 1'b1;
                         ack_o        <= 1'b1;
                         state        <= WRITE1;
@@ -170,7 +171,7 @@ module framebuffer #(
                 READ0: begin
                     if (!writer_full_i) begin
                         // write command
-                        writer_d_o   <= {1'b0, address_i, 16'h0};
+                        writer_d_o   <= {1'b0, FB_BASE_ADDR + address_i, 16'h0};
                         writer_enq_o <= 1'b1;
                         state        <= READ1;
                     end
@@ -244,7 +245,7 @@ module framebuffer #(
                 PRELOAD2: begin
                     // request burst
                     if (!writer_burst_full_i) begin
-                        writer_burst_d_o <= {8'd0, burst_address};
+                        writer_burst_d_o <= {8'd0, FB_BASE_ADDR + burst_address};
                         writer_burst_enq_o <= 1'b1;
                         if (burst_address < stream_base_address + FB_SIZE - 8)
                             burst_address <= burst_address + 8;
