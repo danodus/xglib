@@ -22,7 +22,7 @@ module async_sdram_ctrl #(
     input  wire logic                  writer_clk,
     input  wire logic                  writer_rst_i,
 
-    input  wire logic [40:0]           writer_d_i,
+    input  wire logic [42:0]           writer_d_i,
     input  wire logic                  writer_enq_i,    // enqueue
     output      logic                  writer_full_o,
     output      logic                  writer_alm_full_o,
@@ -65,11 +65,12 @@ module async_sdram_ctrl #(
     logic sc_idle;
     logic [31:0] sc_adr_in, sc_adr_out;
     logic [15:0] sc_dat_in, sc_dat_out;
+    logic [1:0]  sc_sel;
     logic sc_acc;
     logic sc_ack;
     logic sc_we;
 
-    logic [40:0] cmd_reader_q;
+    logic [42:0] cmd_reader_q;
     logic cmd_reader_deq;
     logic cmd_reader_empty, cmd_reader_alm_empty;
 
@@ -98,7 +99,7 @@ module async_sdram_ctrl #(
 
     async_fifo #(
         .ADDR_LEN(10),
-        .DATA_WIDTH(41)
+        .DATA_WIDTH(43)
     ) cmd_async_fifo(
         .reader_clk(sdram_clk),
         .reader_rst_i(sdram_rst),
@@ -244,7 +245,7 @@ module async_sdram_ctrl #(
         .adr_o(sc_adr_out),
         .dat_i(sc_dat_in),
         .dat_o(sc_dat_out),
-        .sel_i(2'b11),
+        .sel_i(sc_sel),
         .acc_i(sc_acc),
         .ack_o(sc_ack),
         .we_i(sc_we)
@@ -257,6 +258,7 @@ module async_sdram_ctrl #(
     READ_BURST_0, READ_BURST_1, READ_BURST_2, READ_BURST_3, READ_BURST_4, READ_BURST_5, READ_BURST_6, READ_BURST_7,
     WRITE_FIFO_DATA_BURST } state;
 
+    logic [1:0]  wr_mask;
     logic [23:0] addr;
     logic [15:0] param;
 
@@ -280,13 +282,16 @@ module async_sdram_ctrl #(
 
             PROCESS_CMD: begin
                 cmd_reader_deq <= 1'b0;
+                wr_mask    <= cmd_reader_q[41:40];
                 addr       <= cmd_reader_q[39:16];
+                //$display("Read: %x", cmd_reader_q[39:16]);
                 param      <= cmd_reader_q[15:0];
-                state      <= cmd_reader_q[40] ? WRITE : READ;
+                state      <= cmd_reader_q[42] ? WRITE : READ;
             end
 
             PROCESS_CH2_CMD: begin
                 cmd_ch2_reader_deq <= 1'b0;
+                wr_mask    <= 2'b11;
                 addr       <= cmd_ch2_reader_q[39:16];
                 param      <= cmd_ch2_reader_q[15:0];
                 state      <= cmd_ch2_reader_q[40] ? WRITE : READ_CH2;
@@ -303,6 +308,7 @@ module async_sdram_ctrl #(
                 if (sc_idle) begin
                     sc_adr_in <= {7'b0, addr, 1'b0};
                     sc_dat_in <= param;
+                    sc_sel    <= wr_mask;
                     sc_acc    <= 1'b1;
                     sc_we     <= 1'b1;
                     state     <= WAIT_SC_WRITE;
