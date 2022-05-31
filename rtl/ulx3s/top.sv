@@ -277,15 +277,15 @@ module top(
         .writer_clk(clk_pix),
         .writer_rst_i(reset),
 
-        .writer_d_i(writer_d),
-        .writer_enq_i(writer_enq),
-        .writer_full_o(writer_full),
-        .writer_alm_full_o(writer_alm_full),
+        .writer_d_i(42'd0),
+        .writer_enq_i(1'b0),
+        .writer_full_o(),
+        .writer_alm_full_o(),
 
-        .writer_ch2_d_i(41'd0),
-        .writer_ch2_enq_i(1'b0),
-        .writer_ch2_full_o(),
-        .writer_ch2_alm_full_o(),
+        .writer_ch2_d_i(writer_d),
+        .writer_ch2_enq_i(writer_enq),
+        .writer_ch2_full_o(writer_full),
+        .writer_ch2_alm_full_o(writer_alm_full),
 
         .writer_burst_d_i(writer_burst_d),
         .writer_burst_enq_i(writer_burst_enq),
