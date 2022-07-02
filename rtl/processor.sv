@@ -55,7 +55,6 @@ module processor(
 
     enum {
         FETCH,
-        FETCH2,
         DECODE,
         DECODE2,
         DECODE3,
@@ -176,14 +175,12 @@ module processor(
                 addr_o     <= pc;
                 we_o       <= 1'b0;
                 sel_o      <= 1'b1;
-                if (ack_i)
-                    state <= FETCH2;
-            end
-            FETCH2: begin
-                sel_o <= 1'b0;
-                instruction <= d_data_out;
-                //$display("PC: %x, Instruction: %x", pc, d_data_out);
-                state <= DECODE;
+                if (ack_i) begin
+                    sel_o <= 1'b0;
+                    instruction <= d_data_out;
+                    //$display("PC: %x, Instruction: %x", pc, d_data_out);
+                    state <= DECODE;
+                end
             end
             DECODE: begin
                 state <= DECODE2;
@@ -193,16 +190,19 @@ module processor(
                 state <= DECODE3;
             end
             DECODE3: begin
-                we_o       <= d_we;
                 // in all instructions, only source register 2 is ever written to memory
                 data_out_o <= reg_out2 << (8 * (d_addr & 2'b11));
                 wr_mask_o  <= mask << (d_addr & 2'b11);
-                if (addr_valid)
+                if (addr_valid) begin
+                    we_o       <= d_we;
                     sel_o <= 1'b1;
-                state <= WAIT_ACK;
+                    state <= WAIT_ACK;
+                end else begin
+                    state <= WRITE;
+                end
             end
             WAIT_ACK: begin
-                if (!sel_o || ack_i) begin
+                if (ack_i) begin
                     //$display("reg_in_source: %d, addr: %h, we: %d, data_in: %x, data_out: %x", reg_in_source, addr_o, we_o, data_in_i, data_out_o);
                     sel_o <= 1'b0;
                     we_o  <= 1'b0;
@@ -210,8 +210,8 @@ module processor(
                 end
             end
             WRITE: begin
-                state <= WRITE2;
                 pc <= next_pc;
+                state <= WRITE2;
             end
             WRITE2: begin
                 state <= FETCH;
