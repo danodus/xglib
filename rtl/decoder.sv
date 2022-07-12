@@ -9,10 +9,10 @@ module decoder(
     input  wire logic [31:0] reg_out2_i,
     output      logic [1:0]  next_pc_sel_o,
     output      logic [1:0]  reg_in_source_o,   // 0: ALU out, 1: memory data out, 2: PC + 4
-    output      logic [4:0]  reg_in_sel_o,
+    output      logic [5:0]  reg_in_sel_o,
     output      logic        reg_in_en_o,
-    output      logic [4:0]  reg_out1_sel_o,
-    output      logic [4:0]  reg_out2_sel_o,
+    output      logic [5:0]  reg_out1_sel_o,
+    output      logic [5:0]  reg_out2_sel_o,
     output      logic [2:0]  alu_op_o,
     output      logic        alu_op_qual_o,
     output      logic        alu_op_ext_o,
@@ -72,9 +72,9 @@ module decoder(
 
         is_branch_taken = 1'b0;
 
-        reg_in_sel_o    = 5'b00000;
-        reg_out1_sel_o  = 5'b00000;
-        reg_out2_sel_o  = 5'b00000;
+        reg_in_sel_o    = 6'b000000;
+        reg_out1_sel_o  = 6'b000000;
+        reg_out2_sel_o  = 6'b000000;
 
         mask_o          = 4'b1111;
         sext_o          = 1'b0;
@@ -85,8 +85,8 @@ module decoder(
 
                 // LUI
                 7'b0110111: begin
-                    reg_in_sel_o    = rd;
-                    reg_out1_sel_o  = 5'b00000; // zero in ALU in1
+                    reg_in_sel_o    = {1'b0, rd};
+                    reg_out1_sel_o  = 6'b000000; // zero in ALU in1
                     imm_o           = u_imm;
                     alu_in2_sel_o   = 1'b1;     // immediate value in ALU in2
                     alu_op_o        = 3'b000;   // ALU add operation
@@ -96,7 +96,7 @@ module decoder(
 
                 // AUIPC
                 7'b0010111: begin
-                    reg_in_sel_o    = rd;
+                    reg_in_sel_o    = {1'b0, rd};
                     imm_o           = u_imm;
                     alu_in1_sel_o   = 1'b1;     // PC value in ALU in1
                     alu_in2_sel_o   = 1'b1;     // immediate value in ALU in2
@@ -108,7 +108,7 @@ module decoder(
                 // JAL
                 7'b1101111: begin
                     reg_in_source_o = 2'b10; // write PC + 4 in RF
-                    reg_in_sel_o    = rd;
+                    reg_in_sel_o    = {1'b0, rd};
                     reg_in_en_o     = 1'b1;  // write to RF
                     addr_o          = j_imm;
                     next_pc_sel_o   = 2'b01; // add the addr field to PC
@@ -117,9 +117,9 @@ module decoder(
                 // JALR
                 7'b1100111: begin
                     reg_in_source_o = 2'b10; // write PC + 4 in RF
-                    reg_in_sel_o    = rd;
+                    reg_in_sel_o    = {1'b0, rd};
                     reg_in_en_o     = 1'b1;  // write to RF
-                    reg_out1_sel_o  = rs1;
+                    reg_out1_sel_o  = {1'b0, rs1};
                     addr_o          = reg_out1_i + i_imm;
                     addr_o          = {addr_o[31:1], 1'b0};
                     next_pc_sel_o   = 2'b11; // set PC to the addr field
@@ -127,8 +127,8 @@ module decoder(
 
                 // BEQ, BNE, BLT, BGE, BLTU, BGEU
                 7'b1100011: begin
-                    reg_out1_sel_o = rs1;
-                    reg_out2_sel_o = rs2;
+                    reg_out1_sel_o = {1'b0, rs1};
+                    reg_out2_sel_o = {1'b0, rs2};
 
                     addr_o = b_imm;
                     case (instr_i[14:12])
@@ -169,8 +169,8 @@ module decoder(
 
                 // LB, LH, LW, LBU, LHU
                 7'b0000011: begin
-                    reg_in_sel_o = rd;                
-                    reg_out1_sel_o = rs1;
+                    reg_in_sel_o = {1'b0, rd};                
+                    reg_out1_sel_o = {1'b0, rs1};
 
                     addr_o = reg_out1_i + i_imm;
                     case (instr_i[14:12])
@@ -224,8 +224,8 @@ module decoder(
 
                 // SB, SH, SW
                 7'b0100011: begin
-                    reg_out1_sel_o = rs1;
-                    reg_out2_sel_o = rs2;
+                    reg_out1_sel_o = {1'b0, rs1};
+                    reg_out2_sel_o = {1'b0, rs2};
                     addr_o = reg_out1_i + s_imm;
                     case (instr_i[14:12])
                         // SB
@@ -252,8 +252,8 @@ module decoder(
 
                 // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI
                 7'b0010011: begin
-                    reg_in_sel_o    = rd;
-                    reg_out1_sel_o  = rs1;
+                    reg_in_sel_o    = {1'b0, rd};
+                    reg_out1_sel_o  = {1'b0, rs1};
                     alu_op_o        = instr_i[14:12];
                     reg_in_source_o = 2'b00; // write ALU result to RF
                     reg_in_en_o     = 1'b1; // write to RF
@@ -267,9 +267,9 @@ module decoder(
 
                 // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
                 7'b0110011: begin
-                    reg_in_sel_o    = rd;
-                    reg_out1_sel_o  = rs1;
-                    reg_out2_sel_o  = rs2;
+                    reg_in_sel_o    = {1'b0, rd};
+                    reg_out1_sel_o  = {1'b0, rs1};
+                    reg_out2_sel_o  = {1'b0, rs2};
                     alu_op_o        = instr_i[14:12];
                     alu_op_qual_o   = instr_i[30];
                     alu_op_ext_o    = instr_i[25];

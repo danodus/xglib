@@ -5,10 +5,10 @@
 module register_file(
     input  wire logic        clk,
     input  wire logic [31:0] in_i,       // data for write back register
-    input  wire logic [4:0]  in_sel_i,   // register number to write back to
+    input  wire logic [5:0]  in_sel_i,   // register number to write back to
     input  wire logic        in_en_i,    // don't actually write back unless asserted
-    input  wire logic [4:0]  out1_sel_i, // register number for out1
-    input  wire logic [4:0]  out2_sel_i, // register number for out2
+    input  wire logic [5:0]  out1_sel_i, // register number for out1
+    input  wire logic [5:0]  out2_sel_i, // register number for out2
     output      logic [31:0] out1_o,
     output      logic [31:0] out2_o,
 
@@ -44,13 +44,17 @@ module register_file(
     output      logic [31:0] dbg_x28,
     output      logic [31:0] dbg_x29,
     output      logic [31:0] dbg_x30,
-    output      logic [31:0] dbg_x31
+    output      logic [31:0] dbg_x31,
+    output      logic [31:0] dbg_q0,
+    output      logic [31:0] dbg_q1,
+    output      logic [31:0] dbg_q2,
+    output      logic [31:0] dbg_q3
     );
 
-    logic [31:0] regs[31:0];
+    logic [31:0] regs[35:0];
 
     initial begin
-        for (integer i = 0; i < 32; i = i + 1)
+        for (integer i = 0; i < 36; i = i + 1)
             regs[i] = 32'd0;
     end
 
@@ -87,6 +91,10 @@ module register_file(
         dbg_x29 = regs[29];
         dbg_x30 = regs[30];
         dbg_x31 = regs[31];
+        dbg_q0  = regs[32];
+        dbg_q1  = regs[33];
+        dbg_q2  = regs[34];
+        dbg_q3  = regs[35];
     end
 
     // actual register file storage

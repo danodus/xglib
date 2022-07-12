@@ -6,6 +6,10 @@ module processor(
     input wire logic       clk,
     input wire logic       reset_i,
 
+    // interrupts
+    input wire logic  [31:0] irq_i,
+    output     logic  [31:0] eoi_o,
+
     // memory
     output      logic        sel_o,
     output      logic [31:0] addr_o,
@@ -24,11 +28,11 @@ module processor(
     logic [31:0] addr;
 
     logic [31:0] reg_in;
-    logic [4:0]  reg_in_sel;
+    logic [5:0]  reg_in_sel;
     logic        reg_in_en;
     logic [1:0]  reg_in_source;
-    logic [4:0]  reg_out1_sel;
-    logic [4:0]  reg_out2_sel;
+    logic [5:0]  reg_out1_sel;
+    logic [5:0]  reg_out2_sel;
     logic [31:0] reg_out1;
     logic [31:0] reg_out2;
     logic [31:0] alu_in1;
@@ -235,6 +239,7 @@ module processor(
 
         if (reset_i) begin
             alu_start  <= 1'b0;
+            eoi_o      <= 32'hFFFFFFFF;
             addr_o     <= 32'd0;
             we_o       <= 1'b0;
             wr_mask_o  <= 4'b1111;
