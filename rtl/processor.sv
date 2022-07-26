@@ -36,7 +36,10 @@ module processor(
 
     logic [2:0]  alu_op;
     logic        alu_op_qual;
+    logic        alu_op_ext;
     logic [31:0] alu_out;
+    logic        alu_start;
+    logic        alu_busy;
 
     logic [31:0] imm;
     logic        alu_in1_sel;
@@ -76,11 +79,15 @@ module processor(
 
     alu alu(
         .clk(clk),
+        .reset_i(reset_i),
+        .start_i(alu_start),
         .in1_i(alu_in1),
         .in2_i(alu_in2),
         .op_i(alu_op),
         .out_o(alu_out),
-        .op_qual_i(alu_op_qual)
+        .op_qual_i(alu_op_qual),
+        .op_ext_i(alu_op_ext),
+        .busy_o(alu_busy)
     );
 
     decoder decoder(
@@ -96,6 +103,7 @@ module processor(
         .reg_out2_sel_o(reg_out2_sel),
         .alu_op_o(alu_op),
         .alu_op_qual_o(alu_op_qual),
+        .alu_op_ext_o(alu_op_ext),
         .d_we_o(d_we),
         .addr_valid_o(addr_valid),
         .addr_o(addr),
@@ -183,11 +191,18 @@ module processor(
                 end
             end
             DECODE: begin
-                state <= DECODE2;
+                alu_start <= 1'b1;
+                state     <= DECODE2;
             end
             DECODE2: begin
-                addr_o     <= d_addr;
-                state <= DECODE3;
+                if (alu_start) begin
+                    alu_start <= 1'b0;
+                end else begin
+                    addr_o    <= d_addr;
+                    if (!alu_busy) begin
+                        state <= DECODE3;
+                    end
+                end
             end
             DECODE3: begin
                 // in all instructions, only source register 2 is ever written to memory
@@ -219,6 +234,7 @@ module processor(
         endcase
 
         if (reset_i) begin
+            alu_start  <= 1'b0;
             addr_o     <= 32'd0;
             we_o       <= 1'b0;
             wr_mask_o  <= 4'b1111;
