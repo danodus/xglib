@@ -1,6 +1,6 @@
 # XGLib
 
-- RISC-V processing unit (RV32I)
+- RISC-V processing unit (RV32IM)
 - SDRAM controller
 - FIFO
 - Frame buffer
@@ -9,7 +9,7 @@
 
 ## Requirements
 
-- RISC-V GNU compiler toolchain for RV32I (https://github.com/riscv-collab/riscv-gnu-toolchain)
+- RISC-V GNU compiler toolchain for RV32IM (https://github.com/riscv-collab/riscv-gnu-toolchain)
 
 ## Getting Started
 
