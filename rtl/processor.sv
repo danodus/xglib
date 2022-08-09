@@ -66,6 +66,7 @@ module processor(
     logic [31:0] d_maskirq, maskirq;
 
     enum {
+        HANDLE_IRQ,
         FETCH,
         DECODE,
         DECODE2,
@@ -192,7 +193,7 @@ module processor(
     always_ff @(posedge clk) begin
 
         case (state)
-            FETCH: begin
+            HANDLE_IRQ: begin
                 if (irq_i[0] && eoi_o[0] && !maskirq[0]) begin
                     $display("IRQ");
                     // interrupt request
@@ -200,15 +201,18 @@ module processor(
                     eoi_o[0] <= 1'b0;
                     state    <= DECODE;
                 end else begin
-                    addr_o     <= pc;
-                    we_o       <= 1'b0;
-                    sel_o      <= 1'b1;
-                    if (ack_i) begin
-                        sel_o <= 1'b0;
-                        instruction <= d_data_out;
-                        //$display("PC: %x, Instruction: %x", pc, d_data_out);
-                        state <= DECODE;
-                    end
+                    state    <= FETCH;
+                end
+            end
+            FETCH: begin
+                addr_o     <= pc;
+                we_o       <= 1'b0;
+                sel_o      <= 1'b1;
+                if (ack_i) begin
+                    sel_o <= 1'b0;
+                    instruction <= d_data_out;
+                    //$display("PC: %x, Instruction: %x", pc, d_data_out);
+                    state <= DECODE;
                 end
             end
             DECODE: begin
@@ -255,7 +259,7 @@ module processor(
                 state <= WRITE2;
             end
             WRITE2: begin
-                state <= FETCH;
+                state <= HANDLE_IRQ;
             end
         endcase
 
@@ -269,7 +273,7 @@ module processor(
             wr_mask_o  <= 4'b1111;
             data_out_o <= 32'd0;
             sel_o <= 1'b0;
-            state <= FETCH;
+            state <= HANDLE_IRQ;
             pc    <= 32'd0;
         end
     end
