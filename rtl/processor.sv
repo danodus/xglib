@@ -60,6 +60,11 @@ module processor(
 
     logic [31:0] d_data_out_ext;
 
+    logic        irq;
+    logic        eoi;
+    logic        set_maskirq;
+    logic [31:0] d_maskirq, maskirq;
+
     enum {
         FETCH,
         DECODE,
@@ -96,6 +101,7 @@ module processor(
 
     decoder decoder(
         .en_i(state == DECODE || state == DECODE2 || state == DECODE3 || state == WAIT_ACK || state == WRITE),
+        .irq_i(irq),
         .instr_i(instruction),
         .reg_out1_i(reg_out1),
         .reg_out2_i(reg_out2),
@@ -115,7 +121,10 @@ module processor(
         .alu_in1_sel_o(alu_in1_sel),
         .alu_in2_sel_o(alu_in2_sel),
         .mask_o(mask),
-        .sext_o(sext)
+        .sext_o(sext),
+        .eoi_o(eoi),
+        .set_maskirq_o(set_maskirq),
+        .maskirq_o(d_maskirq)
     );
 
     // memory
@@ -175,7 +184,7 @@ module processor(
 
     always_comb begin
         d_addr = (state == DECODE || state == DECODE2 || state == DECODE3 || state == WAIT_ACK || state == WRITE) ? addr : pc;
-        reg_in = reg_in_source == 2'b01 ? d_data_out_ext : reg_in_source == 2'b10 ? pc + 4 : alu_out;
+        reg_in = reg_in_source == 2'b01 ? d_data_out_ext : reg_in_source == 2'b10 ? pc + 4 : reg_in_source == 2'b11 ? pc : alu_out;
         alu_in1 = alu_in1_sel ? pc : reg_out1;
         alu_in2 = alu_in2_sel ? imm : reg_out2;
     end
@@ -184,14 +193,22 @@ module processor(
 
         case (state)
             FETCH: begin
-                addr_o     <= pc;
-                we_o       <= 1'b0;
-                sel_o      <= 1'b1;
-                if (ack_i) begin
-                    sel_o <= 1'b0;
-                    instruction <= d_data_out;
-                    //$display("PC: %x, Instruction: %x", pc, d_data_out);
-                    state <= DECODE;
+                if (irq_i[0] && eoi_o[0] && !maskirq[0]) begin
+                    $display("IRQ");
+                    // interrupt request
+                    irq      <= 1'b1;
+                    eoi_o[0] <= 1'b0;
+                    state    <= DECODE;
+                end else begin
+                    addr_o     <= pc;
+                    we_o       <= 1'b0;
+                    sel_o      <= 1'b1;
+                    if (ack_i) begin
+                        sel_o <= 1'b0;
+                        instruction <= d_data_out;
+                        //$display("PC: %x, Instruction: %x", pc, d_data_out);
+                        state <= DECODE;
+                    end
                 end
             end
             DECODE: begin
@@ -230,6 +247,11 @@ module processor(
             end
             WRITE: begin
                 pc <= next_pc;
+                irq <= 1'b0;
+                if (set_maskirq)
+                    maskirq <= d_maskirq;
+                if (eoi)
+                    eoi_o[0] <= 1'b1;
                 state <= WRITE2;
             end
             WRITE2: begin
@@ -238,6 +260,8 @@ module processor(
         endcase
 
         if (reset_i) begin
+            irq        <= 1'b0;
+            maskirq    <= 32'hFFFFFFFF;
             alu_start  <= 1'b0;
             eoi_o      <= 32'hFFFFFFFF;
             addr_o     <= 32'd0;
