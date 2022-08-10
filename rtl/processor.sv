@@ -2,13 +2,15 @@
 // Copyright (c) 2022 Daniel Cliche
 // SPDX-License-Identifier: MIT
 
-module processor(
+module processor #(
+    parameter IRQ_VEC_ADDR = 32'h00000010
+) (
     input wire logic       clk,
     input wire logic       reset_i,
 
-    // interrupts
-    input wire logic  [31:0] irq_i,
-    output     logic  [31:0] eoi_o,
+    // interrupts (2)
+    input wire logic  [1:0]  irq_i,
+    output     logic  [1:0]  eoi_o,
 
     // memory
     output      logic        sel_o,
@@ -61,9 +63,8 @@ module processor(
     logic [31:0] d_data_out_ext;
 
     logic        irq;
+    logic [0:0]  irq_num;
     logic        eoi;
-    logic        set_maskirq;
-    logic [31:0] d_maskirq, maskirq;
 
     enum {
         HANDLE_IRQ,
@@ -100,9 +101,12 @@ module processor(
         .busy_o(alu_busy)
     );
 
-    decoder decoder(
+    decoder #(
+        .IRQ_VEC_ADDR(IRQ_VEC_ADDR)
+    ) decoder(
         .en_i(state == DECODE || state == DECODE2 || state == DECODE3 || state == WAIT_ACK || state == WRITE),
         .irq_i(irq),
+        .irq_num_i(irq_num),
         .instr_i(instruction),
         .reg_out1_i(reg_out1),
         .reg_out2_i(reg_out2),
@@ -123,9 +127,7 @@ module processor(
         .alu_in2_sel_o(alu_in2_sel),
         .mask_o(mask),
         .sext_o(sext),
-        .eoi_o(eoi),
-        .set_maskirq_o(set_maskirq),
-        .maskirq_o(d_maskirq)
+        .eoi_o(eoi)
     );
 
     // memory
@@ -194,11 +196,19 @@ module processor(
 
         case (state)
             HANDLE_IRQ: begin
-                if (irq_i[0] && eoi_o[0] && !maskirq[0]) begin
-                    $display("IRQ");
+                if (irq_i[0] && (eoi_o == 2'b11)) begin
+                    //$display("IRQ 0");
                     // interrupt request
                     irq      <= 1'b1;
+                    irq_num  <= 1'd0;
                     eoi_o[0] <= 1'b0;
+                    state    <= DECODE;
+                end else if (irq_i[1] && (eoi_o == 2'b11)) begin
+                    //$display("IRQ 1");
+                    // interrupt request
+                    irq      <= 1'b1;
+                    irq_num  <= 1'd1;
+                    eoi_o[1] <= 1'b0;
                     state    <= DECODE;
                 end else begin
                     state    <= FETCH;
@@ -252,10 +262,10 @@ module processor(
             WRITE: begin
                 pc <= next_pc;
                 irq <= 1'b0;
-                if (set_maskirq)
-                    maskirq <= d_maskirq;
-                if (eoi)
-                    eoi_o[0] <= 1'b1;
+                if (eoi) begin
+                    //$display("EOI %d", irq_num);
+                    eoi_o[irq_num] <= 1'b1;
+                end
                 state <= WRITE2;
             end
             WRITE2: begin
@@ -265,9 +275,8 @@ module processor(
 
         if (reset_i) begin
             irq        <= 1'b0;
-            maskirq    <= 32'hFFFFFFFF;
             alu_start  <= 1'b0;
-            eoi_o      <= 32'hFFFFFFFF;
+            eoi_o      <= 2'b11;
             addr_o     <= 32'd0;
             we_o       <= 1'b0;
             wr_mask_o  <= 4'b1111;

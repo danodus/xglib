@@ -2,9 +2,12 @@
 // Copyright (c) 2022 Daniel Cliche
 // SPDX-License-Identifier: MIT
 
-module decoder(
+module decoder #(
+    parameter IRQ_VEC_ADDR = 32'h00000010
+) (
     input  wire logic        en_i,
     input  wire logic        irq_i,
+    input  wire logic [0:0]  irq_num_i,
     input  wire logic [31:0] instr_i,
     input  wire logic [31:0] reg_out1_i,
     input  wire logic [31:0] reg_out2_i,
@@ -25,9 +28,7 @@ module decoder(
     output      logic        alu_in2_sel_o,   // 0: RF out2, 1: immediate
     output      logic [3:0]  mask_o,
     output      logic        sext_o,
-    output      logic        eoi_o,
-    output      logic        set_maskirq_o,
-    output      logic [31:0] maskirq_o
+    output      logic        eoi_o
     );
 
     logic [4:0] rd;
@@ -83,8 +84,6 @@ module decoder(
         mask_o          = 4'b1111;
         sext_o          = 1'b0;
         eoi_o           = 1'b0;
-        set_maskirq_o   = 1'b0;
-        maskirq_o       = 32'd0;
 
         if (en_i) begin
             // decode the instruction and assert the relevent control signals
@@ -92,7 +91,7 @@ module decoder(
                 reg_in_source_o = 2'b11;    // write PC in RF
                 reg_in_sel_o    = 6'd32;    // q0
                 reg_in_en_o     = 1'b1;     // write to RF
-                addr_o          = 32'h10;
+                addr_o          = IRQ_VEC_ADDR + irq_num_i * 4;
                 next_pc_sel_o   = 2'b11;    // set PC to the addr field
             end else begin
                 case (instr_i[6:0])
@@ -306,7 +305,7 @@ module decoder(
                     // Custom instructions
                     //
 
-                    // RETIRQ, MASKIRQ
+                    // RETIRQ
                     7'b0001011: begin
                         if (instr_i[31:25] == 7'b0000000) begin
                             // RETIRQ
@@ -315,11 +314,6 @@ module decoder(
                             addr_o          = {addr_o[31:1], 1'b0};
                             next_pc_sel_o   = 2'b11;                // set PC to the addr field
                             eoi_o           = 1'b1;
-                        end else if (instr_i[31:25] == 7'b0000001) begin
-                            // MASKIRQ
-                            reg_out1_sel_o  = {1'b0, rs1};
-                            set_maskirq_o   = 1'b1;
-                            maskirq_o       = reg_out1_i;
                         end
                     end
                     
