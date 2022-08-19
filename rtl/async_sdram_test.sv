@@ -25,7 +25,7 @@ module async_sdram_test #(
 );
 
 
-    logic [40:0] writer_d;
+    logic [59:0] writer_d;
     logic writer_enq;
     logic writer_full;
 
@@ -103,7 +103,7 @@ module async_sdram_test #(
                 WRITE0B: begin
                     if (!writer_full) begin
                         // write command
-                        writer_d <= {1'b1, 24'h2000, 16'h2000};
+                        writer_d <= {20'd1, 24'h2000, 16'h2000};
                         writer_enq <= 1'b1;
                         state <= WRITE0C;
                     end
@@ -116,7 +116,7 @@ module async_sdram_test #(
                 WRITE1: begin
                     if (!writer_full) begin
                         // read command
-                        writer_d <= {1'b0, 24'h1000, 16'h0};
+                        writer_d <= {20'd0, 24'h1000, 16'h0};
                         writer_enq <= 1'b1;
                         state <= WRITE1B;
                     end

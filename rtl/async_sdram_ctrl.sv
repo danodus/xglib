@@ -27,7 +27,7 @@ module async_sdram_ctrl #(
     output      logic                  writer_full_o,
     output      logic                  writer_alm_full_o,
 
-    input  wire logic [40:0]           writer_ch2_d_i,
+    input  wire logic [59:0]           writer_ch2_d_i,
     input  wire logic                  writer_ch2_enq_i,    // enqueue
     output      logic                  writer_ch2_full_o,
     output      logic                  writer_ch2_alm_full_o,
@@ -74,7 +74,7 @@ module async_sdram_ctrl #(
     logic cmd_reader_deq;
     logic cmd_reader_empty, cmd_reader_alm_empty;
 
-    logic [40:0] cmd_ch2_reader_q;
+    logic [59:0] cmd_ch2_reader_q;
     logic cmd_ch2_reader_deq;
     logic cmd_ch2_reader_empty, cmd_ch2_reader_alm_empty;
 
@@ -118,7 +118,7 @@ module async_sdram_ctrl #(
 
     async_fifo #(
         .ADDR_LEN(10),
-        .DATA_WIDTH(41)
+        .DATA_WIDTH(60)
     ) cmd_ch2_async_fifo(
         .reader_clk(sdram_clk),
         .reader_rst_i(sdram_rst),
@@ -261,6 +261,13 @@ module async_sdram_ctrl #(
     logic [1:0]  wr_mask;
     logic [23:0] addr;
     logic [15:0] param;
+    logic [19:0] cnt;
+
+    logic        dup_in_progress;
+    logic [1:0]  dup_wr_mask;
+    logic [23:0] dup_addr;
+    logic [15:0] dup_param;
+    logic [19:0] dup_cnt;
 
     always_ff @(posedge sdram_clk) begin
         case (state)
@@ -271,6 +278,12 @@ module async_sdram_ctrl #(
                 if (!cmd_burst_reader_empty && !data_burst_alm_full) begin
                     cmd_burst_reader_deq <= 1'b1;
                     state          <= PROCESS_BURST_CMD;
+                end else if (dup_in_progress) begin
+                    wr_mask <= dup_wr_mask;
+                    addr <= dup_addr;
+                    param <= dup_param;
+                    cnt <= dup_cnt;
+                    state <= WRITE;
                 end else if (!cmd_reader_empty) begin
                     cmd_reader_deq <= 1'b1;
                     state          <= PROCESS_CMD;
@@ -286,6 +299,7 @@ module async_sdram_ctrl #(
                 addr       <= cmd_reader_q[39:16];
                 //$display("Read: %x", cmd_reader_q[39:16]);
                 param      <= cmd_reader_q[15:0];
+                cnt        <= 20'd1;
                 state      <= cmd_reader_q[42] ? WRITE : READ;
             end
 
@@ -294,7 +308,8 @@ module async_sdram_ctrl #(
                 wr_mask    <= 2'b11;
                 addr       <= cmd_ch2_reader_q[39:16];
                 param      <= cmd_ch2_reader_q[15:0];
-                state      <= cmd_ch2_reader_q[40] ? WRITE : READ_CH2;
+                cnt        <= cmd_ch2_reader_q[59:40];
+                state      <= cmd_ch2_reader_q[59:40] > 0 ? WRITE : READ_CH2;
             end
 
             PROCESS_BURST_CMD: begin
@@ -304,7 +319,7 @@ module async_sdram_ctrl #(
             end
 
             WRITE: begin
-                // Write a single word to SDRAM
+                // Write one or multiple words to SDRAM
                 if (sc_idle) begin
                     sc_adr_in <= {7'b0, addr, 1'b0};
                     sc_dat_in <= param;
@@ -319,12 +334,25 @@ module async_sdram_ctrl #(
                 if (sc_ack) begin
                     sc_acc   <= 1'b0;
                     sc_we    <= 1'b0;
+                    cnt      <= cnt - 1;
+                    addr     <= addr + 1;
                     state    <= WRITE_DELAY;
                 end
             end
 
             WRITE_DELAY: begin
-                    state <= WAIT_CMD;
+                if (cnt > 0) begin
+                    // we don't want to starve the framebuffer stream so we must accept other commands
+                    // backup for next duplication iteration
+                    dup_in_progress <= 1'b1;
+                    dup_wr_mask <= wr_mask;
+                    dup_addr <= addr;
+                    dup_param <= param;
+                    dup_cnt <= cnt;
+                end else begin
+                    dup_in_progress <= 1'b0;
+                end
+                state <= WAIT_CMD;
             end
 
             READ: begin
@@ -448,6 +476,7 @@ module async_sdram_ctrl #(
             cmd_burst_reader_deq <= 1'b0;
             sc_we          <= 1'b0;
             sc_acc         <= 1'b0;
+            dup_in_progress <= 1'b0;
         end
     end
 

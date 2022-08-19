@@ -13,7 +13,7 @@ module framebuffer #(
     // Memory interface
     
     // Writer (input commands)
-    output      logic [40:0]           writer_d_o,
+    output      logic [59:0]           writer_d_o,
     output      logic                  writer_enq_o,
     input  wire logic                  writer_full_i,
     input  wire logic                  writer_alm_full_i,
@@ -38,7 +38,7 @@ module framebuffer #(
     // Framebuffer access
     output      logic                   ack_o,
     input  wire logic                   sel_i,
-    input  wire logic                   wr_i,
+    input  wire logic [19:0]            wr_cnt_i,   // 0: read, >0: write count
     input  wire logic [3:0]             mask_i,
     input  wire logic [23:0]            address_i,
     input  wire logic [15:0]            data_in_i,
@@ -141,7 +141,7 @@ module framebuffer #(
                                     state <= READ2;
                                 end
                             end else if (sel_i && !writer_full_i && !reader_burst_alm_empty_i) begin
-                                state <= wr_i ? WRITE0 : READ0;
+                                state <= wr_cnt_i > 0 ? WRITE0 : READ0;
                             end
                         end
                     end
@@ -155,7 +155,7 @@ module framebuffer #(
                 WRITE0: begin
                     if (!writer_full_i) begin
                         // write command
-                        writer_d_o   <= {1'b1, FB_BASE_ADDR + address_i, data_in_i};
+                        writer_d_o   <= {wr_cnt_i, FB_BASE_ADDR + address_i, data_in_i};
                         writer_enq_o <= 1'b1;
                         ack_o        <= 1'b1;
                         state        <= WRITE1;
@@ -171,7 +171,7 @@ module framebuffer #(
                 READ0: begin
                     if (!writer_full_i) begin
                         // write command
-                        writer_d_o   <= {1'b0, FB_BASE_ADDR + address_i, 16'h0};
+                        writer_d_o   <= {20'd0, FB_BASE_ADDR + address_i, 16'h0};
                         writer_enq_o <= 1'b1;
                         state        <= READ1;
                     end

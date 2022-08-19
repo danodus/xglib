@@ -240,7 +240,7 @@ module top(
     // SDRAM
     //
 
-    logic [40:0] writer_d;
+    logic [59:0] writer_d;
     logic writer_enq;
     logic writer_full, writer_alm_full;
 
