@@ -73,8 +73,7 @@ module processor #(
         DECODE2,
         DECODE3,
         WAIT_ACK,
-        WRITE,
-        WRITE2
+        WRITE
     } state;
 
     register_file register_file(
@@ -266,9 +265,6 @@ module processor #(
                     //$display("EOI %d", irq_num);
                     eoi_o[irq_num] <= 1'b1;
                 end
-                state <= WRITE2;
-            end
-            WRITE2: begin
                 state <= HANDLE_IRQ;
             end
         endcase
