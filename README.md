@@ -4,6 +4,7 @@
 - SDRAM controller
 - FIFO
 - Frame buffer
+- Single precision floating point unit (IEEE-754)
 
 # RISC-V Processing Unit
 
