@@ -8,9 +8,9 @@ DEVICE := 85k
 PACKAGE := CABGA381
 
 PIN_DEF := ulx3s.lpf
-SRC :=  display_timings_480p.sv \
-		hdmi_encoder.v \
+SRC :=  hdmi_encoder.v \
 		generated_pll.v \
+		../display_timings.sv \		
 		../sdram_ctrl.v \
 		../async_fifo.sv \
 		../async_sdram_ctrl.sv \

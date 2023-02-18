@@ -61,7 +61,7 @@ module top(
     logic signed [CORDW-1:0] sx, sy;
     logic hsync, vsync, de, frame, line;
     
-    display_timings_480p #(.CORDW(CORDW)) display_timings_480p(
+    display_timings #(.CORDW(CORDW)) display_timings(
         .clk_pix(clk_pix),
         .rst(reset),
         .sx(sx),

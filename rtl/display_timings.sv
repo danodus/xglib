@@ -1,11 +1,11 @@
-// Project F Library - 640x480p60 Display Timings
+// Project F Library - Display Timings
 // (C)2021 Will Green, open source hardware released under the MIT License
 // Learn more at https://projectf.io
 
 `default_nettype none
 `timescale 1ns / 1ps
 
-module display_timings_480p #(
+module display_timings #(
     parameter CORDW=16,   // signed coordinate width (bits)
     parameter H_RES=640,  // horizontal resolution (pixels)
     parameter V_RES=480,  // vertical resolution (lines)
