@@ -1,5 +1,5 @@
 // processor.sv
-// Copyright (c) 2022 Daniel Cliche
+// Copyright (c) 2022-2023 Daniel Cliche
 // SPDX-License-Identifier: MIT
 
 module processor #(
@@ -73,7 +73,8 @@ module processor #(
         DECODE2,
         DECODE3,
         WAIT_ACK,
-        WRITE
+        WRITE,
+        WAIT_EOI
     } state;
 
     register_file register_file(
@@ -263,8 +264,15 @@ module processor #(
                 irq <= 1'b0;
                 if (eoi) begin
                     //$display("EOI %d", irq_num);
+                    // signal to the user that the interrupt has been handled
                     eoi_o[irq_num] <= 1'b1;
+                    state <= WAIT_EOI;
+                end else begin
+                    state <= HANDLE_IRQ;
                 end
+            end
+            WAIT_EOI: begin
+                // give one clock to the user for releasing the interrupt line
                 state <= HANDLE_IRQ;
             end
         endcase
