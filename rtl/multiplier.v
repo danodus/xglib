@@ -40,7 +40,6 @@ module multiplier
     reg [63: 0] rslt;
     reg [31: 0] factor1_abs;
     reg [31: 0] factor2_abs;
-    reg [ 4: 0] bit_idx;
 
     localparam IDLE_BIT              = 0;
     localparam CALC_BIT              = 1;
@@ -60,7 +59,6 @@ module multiplier
         if (reset) begin
             state <= IDLE;
             ready <= 1'b0;
-            bit_idx   <= 0;
         end else begin
 
             (* parallel_case, full_case *)
@@ -71,25 +69,14 @@ module multiplier
                     if (!ready && valid) begin
                         factor1_abs <= (factor1_is_signed & factor1[31]) ? ~factor1 + 1 : factor1;
                         factor2_abs <= (factor2_is_signed & factor2[31]) ? ~factor2 + 1 : factor2;
-                        bit_idx <= 0;
                         rslt <= 0;
                         state <= CALC;
                     end
                 end
 
                 state[CALC_BIT]: begin
-`ifndef FAKE_MULTIPLIER
-                    /* verilator lint_off WIDTH */
-                    rslt <= rslt + ((factor1_abs&{32{factor2_abs[bit_idx]}})<<bit_idx);
-                    /* verilator lint_on WIDTH */
-                    bit_idx <= bit_idx + 1'b1;
-                    if (&bit_idx) begin
-                        state <= READY;
-                    end
-`else
                     rslt <= factor1_abs * factor2_abs;
                     state <= READY;
-`endif
                 end
 
                 state[READY_BIT]: begin
