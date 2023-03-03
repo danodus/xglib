@@ -1,5 +1,5 @@
 // decoder.sv
-// Copyright (c) 2022 Daniel Cliche
+// Copyright (c) 2022-2023 Daniel Cliche
 // SPDX-License-Identifier: MIT
 
 module decoder #(
@@ -296,27 +296,29 @@ module decoder #(
                         // TODO
                     end
 
-                    // ECALL, EBREAK
+                    // ECALL, EBREAK, SRET or MRET
                     7'b1110011: begin
-                        // TODO
+                        case (instr_i[31:20])
+                            12'b000000000000,
+                            12'b000000000001: begin
+                                // ECALL, EBREAK
+                                reg_in_source_o = 2'b10;    // write PC+4 in RF
+                                reg_in_sel_o    = 6'd33;    // q1
+                                reg_in_en_o     = 1'b1;     // write to RF
+                                addr_o          = IRQ_VEC_ADDR + (instr_i[20] ? 3 : 2) * 4;
+                                next_pc_sel_o   = 2'b11;    // set PC to the addr field
+                            end
+                            12'b000100000010,
+                            12'b001100000010: begin
+                                // SRET, MRET
+                                reg_out1_sel_o  = instr_i[29] ? 6'd32 : 6'd33;  // MRET in q0, SRET in q1
+                                addr_o          = reg_out1_i;
+                                addr_o          = {addr_o[31:1], 1'b0};
+                                next_pc_sel_o   = 2'b11;                // set PC to the addr field
+                                eoi_o           = 1'b1;
+                            end
+                        endcase
                     end
-
-                    //
-                    // Custom instructions
-                    //
-
-                    // RETIRQ
-                    7'b0001011: begin
-                        if (instr_i[31:25] == 7'b0000000) begin
-                            // RETIRQ
-                            reg_out1_sel_o  = 6'd32;                // q0
-                            addr_o          = reg_out1_i;
-                            addr_o          = {addr_o[31:1], 1'b0};
-                            next_pc_sel_o   = 2'b11;                // set PC to the addr field
-                            eoi_o           = 1'b1;
-                        end
-                    end
-                    
                 endcase
             end // not irq
         end // if enabled
