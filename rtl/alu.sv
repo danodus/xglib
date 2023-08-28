@@ -90,7 +90,10 @@ module alu(
                                     div_start <= 1'b1;
                                     state  <= DIV;
                                 end
-                            default: $display("Unknown operation %d", op_i);
+`ifndef SYNTHESIS                           
+                            default:
+                                $display("Unknown operation %d", op_i);
+`endif
                             endcase
                         end
                     end // if start
