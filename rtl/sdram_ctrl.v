@@ -1,434 +1,189 @@
+// ref.: https://gitlab.com/r1809/rvsoc/-/blob/main/src/mem2.v
+
 /*
- * Copyright (c) 2011, Stefan Kristiansson <stefan.kristiansson@saunalahti.fi>
- * All rights reserved.
- *
- * Redistribution and use in source and non-source forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in non-source form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *
- * THIS WORK IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * WORK, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Matching SDRAM controller, do 256 byte bursts
+ * Designed to run at ~100 MHz (i.e. will not work @>110Mhz with grade 7 sdram)
  */
 
- // March 2022, Daniel Cliche: Added ability to disable refresh
+module sdram_ctrl (
+  input             clk_in,     // controller clock
+  
+  // interface to the cache
+  input      [15:0] din,        // data input from cpu
+  output reg [15:0] dout,       // data output to cpu
+  input      [23:0] ad,         // 23 bit upper address
+  output reg        get,        // load word from SDR on sdr_clk2
+  output reg        put,        // send word to SDR on sdr_clk2
+  input  wire       rd,         // SDR start read transaction
+  input  wire       wr,         // SDR start write transaction
+  input  wire       rst,        // cpu reset
+  output wire       calib,      // sdram initialising
 
-module sdram_ctrl #(
-    parameter CLK_FREQ_MHZ	= 100,	// sdram_clk freq in MHZ
-    parameter POWERUP_DELAY	= 200,	// power up delay in us
-    parameter REFRESH_MS	= 64,	// time to wait between refreshes in ms (0 = disable)
-    parameter BURST_LENGTH	= 8,	// 0, 1, 2, 4 or 8 (0 = full page)
-    parameter ROW_WIDTH	    = 13,	// Row width
-    parameter COL_WIDTH	    = 9,	// Column width
-    parameter BA_WIDTH	    = 2,	// Ba width
-    parameter tCAC		    = 2,	// CAS Latency
-    parameter tRAC		    = 5,	// RAS Latency
-    parameter tRP		    = 2,	// Command Period (PRE to ACT)
-    parameter tRC		    = 7,	// Command Period (REF to REF / ACT to ACT)
-    parameter tMRD		    = 2	    // Mode Register Set To Command Delay time
-)
-(
-    // SDRAM interface
-    input			        sdram_rst,
-    input			        sdram_clk,
-    output	[BA_WIDTH-1:0]	ba_o,
-    output		            [12:0]  a_o,
-    output			        cs_n_o,
-    output			        ras_n_o,
-    output			        cas_n_o,
-    output			        we_n_o,
-    output reg	[15:0]	    dq_o,
-    output reg	[1:0]	    dqm_o,
-    input		[15:0]	    dq_i,
-    output reg	        	dq_oe_o,
-    output			        cke_o,
-
-    // Internal interface
-    output			        idle_o,
-    input		[31:0]	    adr_i,
-    output reg	[31:0]	    adr_o,
-    input		[15:0]	    dat_i,
-    output reg	[15:0]	    dat_o,
-    input		[1:0]	    sel_i,
-    input			        acc_i,
-    output reg		        ack_o,
-    input			        we_i
+  // interface to the chip
+  inout      [15:0] sd_data,    // 16 bit databus
+  output reg [12:0] sd_addr,    // 12 bit multiplexed address bus
+  output reg [1:0]  sd_dqm,     // two byte masks
+  output reg [1:0]  sd_ba,      // two banks
+  output            sd_cs,      // chip select
+  output            sd_we,      // write enable
+  output            sd_ras,     // row address select
+  output            sd_cas,     // column address select
+  output            sd_cke,     // clock enable
+  output            sd_clk      // chip clock (inverted from input clk)
 );
-    // Active Command To Read/Write Command Delay Time
-    localparam tRCD = tRAC - tCAC;
 
-    localparam POWERUP_CNT = CLK_FREQ_MHZ*POWERUP_DELAY;
-    // refresh should be done for each row every 64 ms => 64e-3/2^ROW_WIDTH
-    localparam REFRESH_TIMEOUT = (CLK_FREQ_MHZ*REFRESH_MS*1000)/(1<<ROW_WIDTH);
+  localparam BURST_LENGTH   = 3'b111; // 000=1, 001=2, 010=4, 011=8, 111=full page
+  localparam ACCESS_TYPE    = 1'b0;   // 0=sequential, 1=interleaved
+  localparam CAS_LATENCY    = 3'd3;   // 3 needed @ >100Mhz
+  localparam OP_MODE        = 2'b00;  // only 00 (standard operation) allowed
+  localparam WRITE_BURST    = 1'b0;   // 0=write burst enabled, 1=only single access write
 
-    // Burst types
-    localparam
-        SEQUENTIAL  = 1'b0,
-        INTERLEAVED = 1'b1;
+  localparam MODE = {3'b000, WRITE_BURST, OP_MODE, CAS_LATENCY, ACCESS_TYPE, BURST_LENGTH};
+  
+  // Extend the address bus (31 bits, for 16b words)
+  wire [30:0] addr;
+  assign addr = { ad, 7'h0 };
 
-    // Write burst modes
-    localparam
-        PROGRAMMED_BL   = 1'b0,
-        SINGLE_LOCATION = 1'b1;
 
-    // FSM states
-    localparam [3:0]
-        INIT_POWERUP  = 4'h0,
-        INIT_PRE      = 4'h1,
-        INIT_REF      = 4'h2,
-        INIT_PGM_MODE = 4'h3,
-        IDLE          = 4'h4,
-        READ          = 4'h5,
-        WRITE         = 4'h6,
-        ACTIVATE      = 4'h7,
-        PRE           = 4'h8,
-        PRE_ALL       = 4'h9,
-        REF           = 4'ha;
+  // ---------------------------------------------------------------------
+  // --------------------------- startup/reset ---------------------------
+  // ---------------------------------------------------------------------
 
-    // SDRAM commands (a10_oe,a10,ras_n,cas_n,we_n)
-    localparam [4:0]
-        CMD_NOP      = 5'b10111,
-        CMD_BST      = 5'b10110,
-        CMD_READ     = 5'b10101,
-        CMD_READ_AP  = 5'b11101,
-        CMD_WRITE    = 5'b10100,
-        CMD_WRITE_AP = 5'b11100,
-        CMD_ACT      = 5'b00011,
-        CMD_PALL     = 5'b11010,
-        CMD_PRE      = 5'b10010,
-        CMD_REF      = 5'b00001,
-        CMD_SELF     = 5'b00000,
-        CMD_MRS      = 5'b10000;
+  // make sure reset lasts long enough (recommended 100us)
+  reg [12:0] reset;
+  always @(posedge clk_in) begin
+    reset <= (|reset) ? reset - 13'd1 : 0;
+    if(rst)	reset <= 13'd100;
+  end
+  
+  assign calib = |reset;
 
-    reg  [3:0]			        state;
-    reg  [3:0]			        next_state;
-    reg  [31:0]			        cycle_count;
-    reg  [31:0]			        next_cycle_count;
-    reg  [31:0]			        refresh_count;
-    reg  [3:0]			        state_count;
-    reg  [ROW_WIDTH-1:0]		row_active[(1<<BA_WIDTH)-1:0];
-    reg  [(1<<BA_WIDTH)-1:0]	bank_active;
-    reg  [12:0]			        a;
-    reg  [BA_WIDTH-1:0]	        ba;
-    reg  [4:0]			        cmd;
-    reg				            we_r;
-    wire [2:0]			        bl;
-    wire				        a10;
-    wire				        a10_oe;
-    wire [BA_WIDTH-1:0]	        curr_bank;
-    wire				        curr_bank_active;
-    wire [ROW_WIDTH-1:0]        curr_row;
-    wire				        curr_row_active;
+  // ---------------------------------------------------------------------
+  // ------------------ generate ram control signals ---------------------
+  // ---------------------------------------------------------------------
 
-    assign cs_n_o = 1'b0;
-    assign cke_o  = 1'b1;
-    assign a_o    = a10_oe ? {a[12:11], a10, a[9:0]} : a;
-    assign ba_o   = ba;
-    assign {a10_oe,a10,ras_n_o,cas_n_o,we_n_o} = cmd;
-    assign bl = (BURST_LENGTH == 0) ? 3'b111 :
-            (BURST_LENGTH == 1) ? 3'b000 :
-            (BURST_LENGTH == 2) ? 3'b001 :
-            (BURST_LENGTH == 4) ? 3'b010 :
-            (BURST_LENGTH == 8) ? 3'b011 : 3'b00;
-    assign curr_bank = adr_i[(BA_WIDTH+ROW_WIDTH+COL_WIDTH):(ROW_WIDTH+COL_WIDTH+1)];
-    assign curr_row = adr_i[(ROW_WIDTH+COL_WIDTH):(COL_WIDTH+1)];
-    assign curr_bank_active = bank_active[curr_bank];
-    assign curr_row_active = (bank_active[curr_bank] &
-                 (row_active[curr_bank] == curr_row));
-    assign idle_o = (state == IDLE) | (state == REF) | (state == PRE_ALL);
+  // all possible commands
+  localparam CMD_INHIBIT         = 4'b1111;
+  localparam CMD_NOP             = 4'b0111;
+  localparam CMD_ACTIVE          = 4'b0011;
+  localparam CMD_READ            = 4'b0101;
+  localparam CMD_WRITE           = 4'b0100;
+  localparam CMD_BURST_TERMINATE = 4'b0110;
+  localparam CMD_PRECHARGE       = 4'b0010;
+  localparam CMD_AUTO_REFRESH    = 4'b0001;
+  localparam CMD_LOAD_MODE       = 4'b0000;
 
-    always @(posedge sdram_clk) begin
-        if (sdram_rst) begin
-            dq_oe_o <= 1'b0;
-            dq_o <= 0;
-            dqm_o <= 2'b11;
-            cmd <= CMD_NOP;
-            state <= INIT_POWERUP;
-            a <= 0;
-            ba <= 0;
-            ack_o <= 1'b0;
-            cycle_count <= 0;
-            we_r <= 0;
-            bank_active <= 0;
-        end else begin
-            dq_oe_o <= 1'b0;
-            dqm_o <= 2'b11;
-            cmd <= CMD_NOP;
-            ack_o <= 1'b0;
-            refresh_count <= refresh_count + 1;
-            cycle_count <= cycle_count + 1;
-            case (state)
-            INIT_POWERUP: begin
-                if (cycle_count > POWERUP_CNT) begin
-                    cmd <= CMD_PALL;
-                    state <= INIT_PRE;
-                    cycle_count <= 0;
-                end
-            end
+  assign sd_clk = !clk_in; // chip clock shifted 180 deg.
+  assign sd_cke = ~rst;
 
-            INIT_PRE: begin
-                if (cycle_count > tRP) begin
-                    cmd <= CMD_REF;
-                    state <= INIT_REF;
-                    state_count <= 0;
-                    cycle_count <= 0;
-                end
-            end
+  // drive control signals according to current command
+  reg  [3:0] sd_cmd; 
+  assign sd_cs  = sd_cmd[3];
+  assign sd_ras = sd_cmd[2];
+  assign sd_cas = sd_cmd[1];
+  assign sd_we  = sd_cmd[0];
 
-            INIT_REF: begin
-                refresh_count <= 0;
-                if (cycle_count > tRC) begin
-                    cmd <= CMD_REF;
-                    state_count <= state_count + 1;
-                    cycle_count <= 0;
-                end
-                // 8 refresh cycles
-                if (state_count == 4'd7 & cycle_count == tRC) begin
-                    cmd <= CMD_MRS;
-                    state <= INIT_PGM_MODE;
-                    ba <= 2'b00;
-                    a[12:10] <= 0; // Reserved
-                    a[9] <= SINGLE_LOCATION;
-                    a[8:7] <= 0; // Standard operation
-                    a[6:4] <= tCAC;
-                    a[3] <= SEQUENTIAL;
-                    a[2:0] <= bl;
-                    cycle_count <= 0;
-                end
-            end
+  // sdram tri-state databus interaction
+  reg  sd_rden = 0, sd_wren = 0;
 
-            INIT_PGM_MODE: begin
-                if (cycle_count > tMRD)
-                    state <= IDLE;
-            end
+`ifndef SYNTHESIS
+  reg   [15:0] i;
+  assign sd_data  = sd_wren ? i : 16'hzzzz;
+  always @(posedge sd_clk) i <= din;
+  always @(posedge sd_clk) if(sd_rden) dout <= sd_data;
+`else
+  wire  [15:0] o;
+  reg   [15:0] i;
+  BB           bb[15:0] (.T(~sd_wren), .I(i), .O(o), .B(sd_data));
+  always @(posedge clk_in) i <= din;
+//  OFS1P3BX dbo_FF[15:0] (.SCLK(sd_clk), .SP(1'b1),    .Q(i),  .D(din), .PD(1'b0));
+  IFS1P3BX dbi_FF[15:0] (.SCLK(sd_clk), .SP(sd_rden), .Q(dout), .D(o), .PD(1'b0));
+`endif
+  
+  // ---------------------------------------------------------------------
+  // ------------------------ cycle state machine ------------------------
+  // ---------------------------------------------------------------------
+  
+  // The state machine runs at 125Mhz, asynchronous to the CPU.
+  // It idles doing refreshes and switches to burst reads and writes
+  // as requested.
+  
+  localparam STBY  =   0;   // start state, do refreshes
+  localparam RD    =  50;   // start of read sequence
+  localparam WR    = 200;   // start of write sequence
 
-            IDLE: begin
-                cycle_count <= 0;
-                ba <= curr_bank;
-                if (REFRESH_TIMEOUT > 0 && refresh_count >= REFRESH_TIMEOUT) begin
-                    refresh_count <= 0;
-                    if (|bank_active) begin
-                        cmd <= CMD_PALL;
-                        state <= PRE_ALL;
-                    end else begin
-                        cmd <= CMD_REF;
-                        state <= REF;
-                    end
-                end else if (acc_i & curr_row_active) begin
-                    a[12:11] <= adr_i[12:11];
-                    a[9:0] <= adr_i[10:1];
-                    adr_o <= adr_i;
-                    if (we_i) begin
-                        ack_o <= 1'b1;
-                        dqm_o <= ~sel_i;
-                        dq_oe_o <= 1'b1;
-                        dq_o <= dat_i;
-                        cmd <= CMD_WRITE;
-                        state <= WRITE;
-                    end else begin
-                        dqm_o <= 2'b00;
-                        cmd <= CMD_READ;
-                        state <= READ;
-                    end
-                end else if (acc_i & curr_bank_active) begin
-                    cmd <= CMD_PRE;
-                    state <= PRE;
-                    we_r <= we_i;
-                end else if (acc_i) begin
-                    a <= curr_row;
-                    cmd <= CMD_ACT;
-                    state <= ACTIVATE;
-                    we_r <= we_i;
-                end
-            end
+  reg [8:0] t = 0;
 
-            REF: begin
-                if (cycle_count >= tRC-1)
-                    state <= IDLE;
-            end
+  wire mreq =  rd | wr;
 
-            PRE: begin
-                if (cycle_count >= tRP-1) begin
-                    bank_active[curr_bank] <= 1'b0;
-                    a <= curr_row;
-                    cmd <= CMD_ACT;
-                    state <= ACTIVATE;
-                    cycle_count <= 0;
-                end
-            end
+  always @(posedge clk_in) begin
+    sd_cmd <= CMD_NOP;  // default command
+    
+    // move to next state
+    t <= t + 1;
 
-            PRE_ALL: begin
-                if (cycle_count >= tRP-1) begin
-                    bank_active <= 0;
-                    cmd <= CMD_REF;
-                    state <= REF;
-                    cycle_count <= 0;
-                end
-            end
-
-            ACTIVATE: begin
-                if (cycle_count >= tRCD-1) begin
-                    bank_active[curr_bank] <= 1'b1;
-                    row_active[curr_bank] <= curr_row;
-                    a[12:11] <= adr_i[12:11];
-                    a[9:0] <= adr_i[10:1];
-                    adr_o <= adr_i;
-                    if (we_r) begin
-                        ack_o <= 1'b1;
-                        dq_oe_o <= 1'b1;
-                        dq_o <= dat_i;
-                        dqm_o <= ~sel_i;
-                        cmd <= CMD_WRITE;
-                        state <= WRITE;
-                    end else begin
-                        dqm_o <= 2'b00;
-                        cmd <= CMD_READ;
-                        state <= READ;
-                    end
-                    cycle_count <= 0;
-                end
-            end
-
-            READ: begin
-                /* TODO: support for full page burst */
-                dqm_o <= 2'b00;
-                if (cycle_count == 0) begin
-                    next_cycle_count <= 0;
-                    next_state <= IDLE;
-                end
-
-                if (cycle_count == tCAC) begin
-                    ack_o <= 1'b1;
-                    adr_o <= adr_i;
-                end
-
-                if (cycle_count >= tCAC) begin
-                    dat_o <= dq_i;
-                end
-
-                if (cycle_count > tCAC) begin
-                    if (BURST_LENGTH == 8)
-                        adr_o[3:1] <= adr_o[3:1] + 3'b1;
-                    else if (BURST_LENGTH == 4)
-                        adr_o[2:1] <= adr_o[2:1] + 2'b1;
-                    else if (BURST_LENGTH == 2)
-                        adr_o[1] <= adr_o[1] + 1'b1;
-                end
-
-                /* dqm has a latency of 2 cycles */
-                if (cycle_count >= (BURST_LENGTH-1 + tCAC - 2) &
-                    next_state != READ)
-                    dqm_o <= 2'b11;
-
-                if (cycle_count >= (BURST_LENGTH-1) & next_state == IDLE) begin
-                    if (acc_i & curr_row_active & !we_i) begin
-                        dqm_o <= 2'b00;
-                        ba <= curr_bank;
-                        a[12:11] <= adr_i[12:11];
-                        a[9:0] <= adr_i[10:1];
-                        cmd <= CMD_READ;
-                        next_cycle_count <= tCAC - (cycle_count - (BURST_LENGTH-1));
-                        next_state <= READ;
-                    end else if (acc_i & curr_bank_active) begin
-                        we_r <= we_i;
-                        cmd <= CMD_PRE;
-                        next_cycle_count <= tCAC - (cycle_count - (BURST_LENGTH-1));
-                        next_state <= PRE;
-                    end else if (acc_i) begin
-                        we_r <= we_i;
-                        a <= curr_row;
-                        cmd <= CMD_ACT;
-                        next_cycle_count <= tCAC - (cycle_count - (BURST_LENGTH-1));
-                        next_state <= ACTIVATE;
-                    end
-                end
-
-                if (cycle_count >= (tCAC + BURST_LENGTH-1)) begin
-                    cycle_count <= next_cycle_count;
-                    state <= next_state;
-                    next_state <= IDLE;
-                    if (next_state == IDLE) begin
-                        cycle_count <= 0;
-                        if (acc_i & curr_row_active & we_i) begin
-                            ack_o <= 1'b1;
-                            ba <= curr_bank;
-                            a[12:11] <= adr_i[12:11];
-                            a[9:0] <= adr_i[10:1];
-                            adr_o <= adr_i;
-                            dq_o <= dat_i;
-                            dqm_o <= ~sel_i;
-                            dq_oe_o <= 1'b1;
-                            cmd <= CMD_WRITE;
-                        end else if (acc_i & curr_row_active & !we_i) begin
-                            ba <= curr_bank;
-                            a[12:11] <= adr_i[12:11];
-                            a[9:0] <= adr_i[10:1];
-                            dqm_o <= 2'b00;
-                            cmd <= CMD_READ;
-                        end else if (acc_i & curr_bank_active) begin
-                            we_r <= we_i;
-                            cmd <= CMD_PRE;
-                            state <= PRE;
-                        end else if (acc_i) begin
-                            we_r <= we_i;
-                            a <= curr_row;
-                            cmd <= CMD_ACT;
-                            state <= ACTIVATE;
-                        end else begin
-                            cmd <= CMD_NOP;
-                            state <= IDLE;
-                        end
-                    end
-                end
-            end
-
-            WRITE: begin
-                /* TODO: support for burst writes */
-                cycle_count <= 0;
-                if (acc_i & curr_row_active & we_i) begin
-                    ack_o <= 1'b1;
-                    ba <= curr_bank;
-                    a[12:11] <= adr_i[12:11];
-                    a[9:0] <= adr_i[10:1];
-                    adr_o <= adr_i;
-                    dq_o <= dat_i;
-                    dqm_o <= ~sel_i;
-                    dq_oe_o <= 1'b1;
-                    cmd <= CMD_WRITE;
-                end else if (acc_i & curr_row_active & !we_i) begin
-                    ba <= curr_bank;
-                    a[12:11] <= adr_i[12:11];
-                    a[9:0] <= adr_i[10:1];
-                    dqm_o <= 2'b00;
-                    cmd <= CMD_READ;
-                    state <= READ;
-                end else if (acc_i & curr_bank_active) begin
-                    we_r <= we_i;
-                    cmd <= CMD_PRE;
-                    state <= PRE;
-                end else if (acc_i) begin
-                    we_r <= we_i;
-                    a <= curr_row;
-                    cmd <= CMD_ACT;
-                    state <= ACTIVATE;
-                end else begin
-                    cmd <= CMD_NOP;
-                    state <= IDLE;
-                end
-            end
-            endcase
-        end
+    if(reset != 0) begin // reset operation
+      case(reset)
+      99: begin sd_ba   <= 2'b00; sd_dqm  <= 2'b00;
+                get     <= 1'b0;  put     <= 1'b0;
+                sd_rden <= 1'b0;  sd_wren <= 1'b0;
+          end
+      41: sd_addr[10] <= 1'b1; // PRECHARGE ALL
+      40: sd_cmd  <= CMD_PRECHARGE;
+      30: sd_cmd  <= CMD_AUTO_REFRESH;
+      20: sd_cmd  <= CMD_AUTO_REFRESH;
+      11: sd_addr <= MODE;
+      10: sd_cmd  <= CMD_LOAD_MODE;
+       1: t <= STBY;
+      endcase
     end
+    
+    else begin // normal operation
+      case(t)
+
+      // Idle doing refreshes
+      //
+      STBY:   begin
+                sd_addr <= addr[21: 9];
+                sd_ba   <= addr[23:22];
+                if (mreq) begin
+                  sd_cmd <= CMD_ACTIVE;
+                  t <= rd ? RD : WR;
+                end
+              end
+
+      STBY+1:  sd_cmd <= CMD_AUTO_REFRESH;
+      STBY+10: t <= STBY;
+      
+      // Read burst, set-up for tRCD = 2 clocks and CL = 3 clocks. Possibly the burst
+      // terminate could come earlier. The 'get' signal accounts for the dbi_FF delay.
+      //
+      RD+2:   sd_addr <= { 4'b0010, addr[8:0] }; 
+      RD+3:   sd_cmd  <= CMD_READ;
+      RD+6:   begin sd_rden <= 1'b1; get <= 1'b1; end                   
+      // ... 128 read cycles
+      RD+134: begin sd_rden <= 1'b0; get <= 1'b0; end                                   
+      RD+136: sd_cmd  <= CMD_BURST_TERMINATE;    
+      RD+137: sd_cmd  <= CMD_PRECHARGE; /* ALL */
+      RD+140: t       <= STBY+1;
+      
+      // Write burst, set up for tRCD = 2. Burst terminate has to be exact here, and
+      // the 'put' signal accounts for a 3 clock pipeline to fetch data.
+      //
+      WR+2:   put     <= 1'b1;                   
+      WR+3:   sd_addr <= { 4'b0010, addr[8:0] }; 
+      WR+4:   sd_wren <= 1'b1;
+      WR+5:   sd_cmd  <= CMD_WRITE;              
+      // ... 128 write cycles
+      WR+130: put     <= 1'b0;                   
+      WR+133: sd_cmd  <= CMD_BURST_TERMINATE;    
+      WR+134: sd_wren <= 1'b0;                   
+      WR+135: sd_cmd  <= CMD_PRECHARGE; /* ALL */
+      WR+140: t       <= STBY+1;
+
+      endcase
+    end
+  end
+
 endmodule
+
