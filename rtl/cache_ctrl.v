@@ -70,22 +70,14 @@ module cache_ctrl (
   wire valid   = m_req & !m_bsy & hit;
   assign m_bsy = !mrdy | (m_req & ((!hit & !boot) | mstat==0 | cstat!=0));
   
-  // Handle partial words for output data: align lowest byte
   // note: does not handle mis-alignment
   //
   wire [31:0] x_dout = boot ? b_dout : c_dout;
   wire [31:0] dout = x_dout >> { addr[1:0], 3'b0 };
 
-  assign m_dout = (ctrl==4'b0001) ? {{24{dout[7]}}, dout[7:0]} :     //  8 bit write
-                  (ctrl==4'b0011) ? {16'h0, dout[15:0]} :            // 16 bit write
-                  dout;                                              // 32 bit write
+  assign m_dout = dout;
 
-  //Handle partial words for input data: replicate and form wmask
-  //
-  wire [31:0] xin = (ctrl==4'b0001) ? {4{din[ 7:0]}} :   //  8 bit write
-                    (ctrl==4'b0011) ? {2{din[15:0]}} :   // 16 bit write
-                                          din;           // 32 bit write
-
+  wire [31:0] xin = din;
   wire  [3:0] wmask = ctrl;
 
   // Boot ROM / RAM
