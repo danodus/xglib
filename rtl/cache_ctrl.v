@@ -1,11 +1,7 @@
 // ref.: https://gitlab.com/r1809/rvsoc/-/blob/main/src/mem2.v
 
 /*
- * RVSoC Memory
- * - bus adapter
- * - boot rom/ram (4KB + 4KB) at address zero
- * - 16KB four way, set associative cache w/ 256 byte cache lines
- * - SDRAM controller
+ * 16KB four way, set associative cache w/ 256 byte cache lines
  *
  * This source code is public domain
  *
@@ -37,7 +33,7 @@ module cache_ctrl (
 );
 
   // ---------------------------------------------------------------------
-  // ----------------- bus interface & boot rom/ram  ---------------------
+  // ----------------- bus interface -------------------------------------
   // ---------------------------------------------------------------------
   
   // Latch rd selection lines
@@ -45,7 +41,7 @@ module cache_ctrl (
   reg  [3:0] ctrl;
   reg [31:0] addr;
   reg [31:0] din;
-  reg        rd, wr, boot;
+  reg        rd, wr;
   always @(posedge cpu_clk) begin
     if(rst) begin rd <= 1'b0; wr <= 1'b0; end;
     if(m_rd|m_wr) begin
@@ -53,41 +49,30 @@ module cache_ctrl (
       rd <= m_rd; wr <= m_wr;
     end
     if(!m_bsy) begin rd <= m_rd; wr <= m_wr; end
-    //boot <= (m_addr[31:14]==0);
-    boot <= 1'b0;
   end
     
   reg mstat, xreq;
   always @(posedge cpu_clk) begin
     if(rst)                     mstat <= 0;
     if((m_rd|m_wr) & mstat==0)  mstat <= 1;
-    if(mstat==1 & (valid|boot)) mstat <= 0;
+    if(mstat==1 & (valid))      mstat <= 0;
     xreq <= m_req;
   end;
-  wire req = xreq & !boot;
+  wire req = xreq;
   
   wire m_req   = (m_rd|m_wr) & !rst;
   wire valid   = m_req & !m_bsy & hit;
-  assign m_bsy = !mrdy | (m_req & ((!hit & !boot) | mstat==0 | cstat!=0));
+  assign m_bsy = !mrdy | (m_req & ((!hit) | mstat==0 | cstat!=0));
   
   // note: does not handle mis-alignment
   //
-  wire [31:0] x_dout = boot ? b_dout : c_dout;
+  wire [31:0] x_dout = c_dout;
   wire [31:0] dout = x_dout >> { addr[1:0], 3'b0 };
 
   assign m_dout = dout;
 
   wire [31:0] xin = din;
   wire  [3:0] wmask = ctrl;
-
-  // Boot ROM / RAM
-  //
-  wire [31:0] b_dout;
-  wire        b_write = boot & wr; // & addr[12];
-  wire  [3:0] b_wmask = {4{b_write}} & wmask;
-  
-  BROM brom( .b_clk(cpu_clk), .b_addr(addr[13:2]), .b_din(xin),
-             .b_dout(b_dout), .b_re(rd & boot), .b_wmask(b_wmask) );
 
   // ---------------------------------------------------------------------
   // ------------------------ cache tag management -----------------------
@@ -168,7 +153,7 @@ module cache_ctrl (
   // Update dirty bits
   //
   always @(posedge cpu_clk) begin
-    if(valid & !boot) begin
+    if(valid) begin
       if (fnd0) dirty0[set] <= dirty0[set] | wr;
       if (fnd1) dirty1[set] <= dirty1[set] | wr;
       if (fnd2) dirty2[set] <= dirty2[set] | wr;
@@ -255,7 +240,7 @@ module cache_ctrl (
   // Cache RAM
   //
   wire     [31:0] c_dout;
-  wire            c_write = !boot & wr & valid;
+  wire            c_write = wr & valid;
   wire      [3:0] c_wmask = {4{c_write}} & wmask;
   wire [bWAY-1:0] c_way = { fnd3|fnd2, fnd3|fnd1 };
 
@@ -270,7 +255,7 @@ module cache_ctrl (
              .c_addr({ c_way, set,   addr[7:2] }),
              .c_din(xin),
              .c_dout(c_dout),
-             .c_re(rd & !boot),
+             .c_re(rd),
              .c_wmask(c_wmask),
              
              .r_clk(ram_clk),
@@ -288,65 +273,6 @@ module cache_ctrl (
            assign ram_put = ram_put_i;
            assign ram_rd_o = ram_rd;
            assign ram_wr_o = ram_wr;
-/*           
-  SDRAM sdram( .clk_in(ram_clk),
-               .din(ram_din),
-               .dout(ram_dout),
-               .ad(ram_addr),
-               .get(ram_get),
-               .put(ram_put),
-               .rd(ram_rd),
-               .wr(ram_wr),
-               .rst(rst),
-               //.calib(m_calib),
-              
-               .sd_data(sd_data),
-               .sd_addr(sd_addr),
-               .sd_dqm(sd_dqm), 
-               .sd_ba(sd_ba),  
-               .sd_cs(sd_cs),  
-               .sd_we(sd_we),  
-               .sd_ras(sd_ras), 
-               .sd_cas(sd_cas), 
-               .sd_cke(sd_cke), 
-               .sd_clk(sd_clk) 
-             );
-*/
-
-endmodule
-
-/*
- * Boot ROM/RAM: 8KB x 32b, single-ported 
- */
-
-module BROM (
-  input  wire        b_clk,         // SDRAM clock
-  input  wire [11:0] b_addr,        // address
-  input  wire [31:0] b_din,         // data to mem
-  output reg  [31:0] b_dout,        // data from mem
-  input  wire        b_re,          // read enable
-  input  wire  [3:0] b_wmask        // byte write mask
-);
-
-  reg [31:0] mem[0:4095];
-
-  always @(posedge b_clk) begin
-    if (b_re) b_dout <= mem[b_addr];
-  end
-  
-  always @(posedge b_clk) begin
-    if (b_wmask[3]) mem[b_addr][31:24] <= b_din[31:24];
-    if (b_wmask[2]) mem[b_addr][23:16] <= b_din[23:16];
-    if (b_wmask[1]) mem[b_addr][15: 8] <= b_din[15: 8];
-    if (b_wmask[0]) mem[b_addr][ 7: 0] <= b_din[ 7: 0];
-  end
-
-  integer i;
-  initial begin
-    //$readmemh("../monitor/mem.bin", mem);
-    //for(i=1024; i<4096; i=i+1)
-    //  mem[i] = 0; 
-  end
 
 endmodule
 
