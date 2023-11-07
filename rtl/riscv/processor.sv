@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 module processor #(
+    parameter RESET_VEC_ADDR = 32'h00000000,
     parameter IRQ_VEC_ADDR = 32'h00000010
 ) (
     input wire logic       clk,
@@ -287,7 +288,7 @@ module processor #(
             data_out_o <= 32'd0;
             sel_o <= 1'b0;
             state <= HANDLE_IRQ;
-            pc    <= 32'd0;
+            pc    <= RESET_VEC_ADDR;
         end
     end
 
