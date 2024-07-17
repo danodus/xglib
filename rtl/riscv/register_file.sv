@@ -1,9 +1,10 @@
 // register_file.sv
-// Copyright (c) 2022 Daniel Cliche
+// Copyright (c) 2022-2024 Daniel Cliche
 // SPDX-License-Identifier: MIT
 
 module register_file(
     input  wire logic        clk,
+    input  wire logic        ce_i,
     input  wire logic [31:0] in_i,       // data for write back register
     input  wire logic [5:0]  in_sel_i,   // register number to write back to
     input  wire logic        in_en_i,    // don't actually write back unless asserted
@@ -99,11 +100,13 @@ module register_file(
 
     // actual register file storage
     always_ff @(posedge clk) begin
-        if (in_en_i) begin
-            if (in_sel_i != 0)
-                regs[in_sel_i] <= in_i;
+        if (ce_i) begin
+            if (in_en_i) begin
+                if (in_sel_i != 0)
+                    regs[in_sel_i] <= in_i;
+            end
+            out1_o = regs[out1_sel_i];
+            out2_o = regs[out2_sel_i];
         end
-        out1_o = regs[out1_sel_i];
-        out2_o = regs[out2_sel_i];
     end
 endmodule

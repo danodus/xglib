@@ -21,6 +21,7 @@ module divider
     (
         input wire clk,
         input wire reset,
+        input wire ce,
 
         input  wire [              31 : 0] divident,
         input  wire [              31 : 0] divisor,
@@ -73,49 +74,49 @@ module divider
             ready     <= 1'b0;
             bit_idx   <= 0;
         end else begin
+            if (ce) begin
+                (* parallel_case, full_case *)
+                case (1'b1)
 
-            (* parallel_case, full_case *)
-            case (1'b1)
+                    div_state[IDLE_BIT]: begin
+                        ready <= 1'b0;
+                        if (!ready && valid) begin
+                            div_rslt <= divident_abs;
+                            rem_rslt <= 0;
 
-                div_state[IDLE_BIT]: begin
-                    ready <= 1'b0;
-                    if (!ready && valid) begin
-                        div_rslt <= divident_abs;
-                        rem_rslt <= 0;
-
-                        bit_idx <= 0;
-                        div_state <= CALC;
-                    end
-                end
-
-                div_state[CALC_BIT]: begin
-                    bit_idx <= bit_idx + 1'b1;
-                    if (rem_rslt_sub_divident[32]) begin
-                        rem_rslt <= rem_rslt_next;
-                        /* verilator lint_off WIDTH */
-                        div_rslt <= div_rslt_next | 1'b0;
-                        /* verilator lint_on WIDTH */
-                    end else begin
-                        rem_rslt <= rem_rslt_sub_divident[31:0];
-                        /* verilator lint_off WIDTH */
-                        div_rslt <= div_rslt_next | 1'b1;
-                        /* verilator lint_on WIDTH */
+                            bit_idx <= 0;
+                            div_state <= CALC;
+                        end
                     end
 
-                    if (&bit_idx) begin
-                        div_state <= READY;
+                    div_state[CALC_BIT]: begin
+                        bit_idx <= bit_idx + 1'b1;
+                        if (rem_rslt_sub_divident[32]) begin
+                            rem_rslt <= rem_rslt_next;
+                            /* verilator lint_off WIDTH */
+                            div_rslt <= div_rslt_next | 1'b0;
+                            /* verilator lint_on WIDTH */
+                        end else begin
+                            rem_rslt <= rem_rslt_sub_divident[31:0];
+                            /* verilator lint_off WIDTH */
+                            div_rslt <= div_rslt_next | 1'b1;
+                            /* verilator lint_on WIDTH */
+                        end
+
+                        if (&bit_idx) begin
+                            div_state <= READY;
+                        end
                     end
-                end
 
-                div_state[READY_BIT]: begin
-                    div_rslt  <= (is_signed & (divident[31] ^ divisor[31]) & |divisor) ? ~div_rslt + 1 : div_rslt;
-                    rem_rslt  <= (is_signed & divident[31]) ? ~rem_rslt + 1 : rem_rslt;
-                    ready     <= 1'b1;
-                    div_state <= IDLE;
-                end
+                    div_state[READY_BIT]: begin
+                        div_rslt  <= (is_signed & (divident[31] ^ divisor[31]) & |divisor) ? ~div_rslt + 1 : div_rslt;
+                        rem_rslt  <= (is_signed & divident[31]) ? ~rem_rslt + 1 : rem_rslt;
+                        ready     <= 1'b1;
+                        div_state <= IDLE;
+                    end
 
-            endcase
-
+                endcase
+            end
         end
     end
 

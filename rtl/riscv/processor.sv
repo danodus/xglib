@@ -1,5 +1,5 @@
 // processor.sv
-// Copyright (c) 2022-2023 Daniel Cliche
+// Copyright (c) 2022-2024 Daniel Cliche
 // SPDX-License-Identifier: MIT
 
 module processor #(
@@ -8,6 +8,7 @@ module processor #(
 ) (
     input wire logic       clk,
     input wire logic       reset_i,
+    input wire logic       ce_i,
 
     // interrupts (2)
     input wire logic  [1:0]  irq_i,
@@ -70,6 +71,8 @@ module processor #(
     enum {
         HANDLE_IRQ,
         FETCH,
+        FETCH2,
+        FETCH3,
         DECODE,
         DECODE2,
         DECODE3,
@@ -80,6 +83,7 @@ module processor #(
 
     register_file register_file(
         .clk(clk),
+        .ce_i(ce_i),
         .in_i(reg_in),
         .in_sel_i(reg_in_sel),
         .in_en_i(reg_in_en && state == WRITE),
@@ -91,6 +95,7 @@ module processor #(
 
     alu alu(
         .clk(clk),
+        .ce_i(ce_i),
         .reset_i(reset_i),
         .start_i(alu_start),
         .in1_i(alu_in1),
@@ -194,89 +199,96 @@ module processor #(
     end
 
     always_ff @(posedge clk) begin
-
-        case (state)
-            HANDLE_IRQ: begin
-                if (irq_i[0] && (eoi_o == 2'b11)) begin
-                    //$display("IRQ 0");
-                    // interrupt request
-                    irq      <= 1'b1;
-                    irq_num  <= 1'd0;
-                    eoi_o[0] <= 1'b0;
-                    state    <= DECODE;
-                end else if (irq_i[1] && (eoi_o == 2'b11)) begin
-                    //$display("IRQ 1");
-                    // interrupt request
-                    irq      <= 1'b1;
-                    irq_num  <= 1'd1;
-                    eoi_o[1] <= 1'b0;
-                    state    <= DECODE;
-                end else begin
-                    state    <= FETCH;
-                end
-            end
-            FETCH: begin
-                addr_o     <= pc;
-                we_o       <= 1'b0;
-                sel_o      <= 1'b1;
-                if (ack_i) begin
-                    sel_o <= 1'b0;
-                    instruction <= d_data_out;
-                    //$display("PC: %x, Instruction: %x", pc, d_data_out);
-                    state <= DECODE;
-                end
-            end
-            DECODE: begin
-                alu_start <= 1'b1;
-                state     <= DECODE2;
-            end
-            DECODE2: begin
-                if (alu_start) begin
-                    alu_start <= 1'b0;
-                end else begin
-                    addr_o    <= d_addr;
-                    if (!alu_busy) begin
-                        state <= DECODE3;
+        if (ce_i) begin
+            case (state)
+                HANDLE_IRQ: begin
+                    if (irq_i[0] && (eoi_o == 2'b11)) begin
+                        //$display("IRQ 0");
+                        // interrupt request
+                        irq      <= 1'b1;
+                        irq_num  <= 1'd0;
+                        eoi_o[0] <= 1'b0;
+                        state    <= DECODE;
+                    end else if (irq_i[1] && (eoi_o == 2'b11)) begin
+                        //$display("IRQ 1");
+                        // interrupt request
+                        irq      <= 1'b1;
+                        irq_num  <= 1'd1;
+                        eoi_o[1] <= 1'b0;
+                        state    <= DECODE;
+                    end else begin
+                        state    <= FETCH;
                     end
                 end
-            end
-            DECODE3: begin
-                // in all instructions, only source register 2 is ever written to memory
-                data_out_o <= reg_out2 << (8 * (d_addr & 2'b11));
-                wr_mask_o  <= mask << (d_addr & 2'b11);
-                if (addr_valid) begin
-                    we_o       <= d_we;
-                    sel_o <= 1'b1;
-                    state <= WAIT_ACK;
-                end else begin
-                    state <= WRITE;
+                FETCH: begin
+                    addr_o     <= pc;
+                    we_o       <= 1'b0;
+                    sel_o      <= 1'b1;
+                    state      <= FETCH2;
                 end
-            end
-            WAIT_ACK: begin
-                if (ack_i) begin
-                    //$display("reg_in_source: %d, addr: %h, we: %d, data_in: %x, data_out: %x", reg_in_source, addr_o, we_o, data_in_i, data_out_o);
-                    sel_o <= 1'b0;
-                    we_o  <= 1'b0;
-                    state <= WRITE;
+                FETCH2: begin
+                    state <= FETCH3;
                 end
-            end
-            WRITE: begin
-                pc <= next_pc;
-                irq <= 1'b0;
-                if (eoi) begin
-                    //$display("EOI %d", irq_num);
-                    // signal to the user that the interrupt has been handled
-                    eoi_o[irq_num] <= 1'b1;
-                    state <= WAIT_EOI;
-                end else begin
+                FETCH3: begin
+                    if (ack_i) begin
+                        sel_o <= 1'b0;
+                        instruction <= d_data_out;
+                        //$display("PC: %x, Instruction: %x", pc, d_data_out);
+                        state <= DECODE;
+                    end
+                end
+                DECODE: begin
+                    alu_start <= 1'b1;
+                    state     <= DECODE2;
+                end
+                DECODE2: begin
+                    if (alu_start) begin
+                        alu_start <= 1'b0;
+                    end else begin
+                        addr_o    <= d_addr;
+                        if (!alu_busy) begin
+                            state <= DECODE3;
+                        end
+                    end
+                end
+                DECODE3: begin
+                    // in all instructions, only source register 2 is ever written to memory
+                    data_out_o <= reg_out2 << (8 * (d_addr & 2'b11));
+                    wr_mask_o  <= mask << (d_addr & 2'b11);
+                    if (addr_valid) begin
+                        we_o       <= d_we;
+                        sel_o <= 1'b1;
+                        state <= WAIT_ACK;
+                    end else begin
+                        state <= WRITE;
+                    end
+                end
+                WAIT_ACK: begin
+                    if (ack_i) begin
+                        //$display("reg_in_source: %d, addr: %h, we: %d, data_in: %x, data_out: %x", reg_in_source, addr_o, we_o, data_in_i, data_out_o);
+                        sel_o <= 1'b0;
+                        we_o  <= 1'b0;
+                        state <= WRITE;
+                    end
+                end
+                WRITE: begin
+                    pc <= next_pc;
+                    irq <= 1'b0;
+                    if (eoi) begin
+                        //$display("EOI %d", irq_num);
+                        // signal to the user that the interrupt has been handled
+                        eoi_o[irq_num] <= 1'b1;
+                        state <= WAIT_EOI;
+                    end else begin
+                        state <= HANDLE_IRQ;
+                    end
+                end
+                WAIT_EOI: begin
+                    // give one clock to the user for releasing the interrupt line
                     state <= HANDLE_IRQ;
                 end
-            end
-            WAIT_EOI: begin
-                // give one clock to the user for releasing the interrupt line
-                state <= HANDLE_IRQ;
-            end
-        endcase
+            endcase
+        end // ce
 
         if (reset_i) begin
             irq        <= 1'b0;

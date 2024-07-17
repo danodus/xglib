@@ -21,6 +21,7 @@ module multiplier
     (
         input wire clk,
         input wire reset,
+        input wire ce,
         input  wire  [31               : 0]  factor1,
         input  wire  [31               : 0]  factor2,
         input  wire  [1                : 0]  MULop,
@@ -60,35 +61,36 @@ module multiplier
             state <= IDLE;
             ready <= 1'b0;
         end else begin
+            if (ce) begin
+                (* parallel_case, full_case *)
+                case (1'b1)
 
-            (* parallel_case, full_case *)
-            case (1'b1)
-
-                state[IDLE_BIT]: begin
-                    ready <= 1'b0;
-                    if (!ready && valid) begin
-                        factor1_abs <= (factor1_is_signed & factor1[31]) ? ~factor1 + 1 : factor1;
-                        factor2_abs <= (factor2_is_signed & factor2[31]) ? ~factor2 + 1 : factor2;
-                        rslt <= 0;
-                        state <= CALC;
+                    state[IDLE_BIT]: begin
+                        ready <= 1'b0;
+                        if (!ready && valid) begin
+                            factor1_abs <= (factor1_is_signed & factor1[31]) ? ~factor1 + 1 : factor1;
+                            factor2_abs <= (factor2_is_signed & factor2[31]) ? ~factor2 + 1 : factor2;
+                            rslt <= 0;
+                            state <= CALC;
+                        end
                     end
-                end
 
-                state[CALC_BIT]: begin
-                    rslt <= factor1_abs * factor2_abs;
-                    state <= READY;
-                end
+                    state[CALC_BIT]: begin
+                        rslt <= factor1_abs * factor2_abs;
+                        state <= READY;
+                    end
 
-                state[READY_BIT]: begin
-                    /* verilator lint_off WIDTH */
-                    rslt <= ((factor1[31] & factor1_is_signed ^ factor2[31] & factor2_is_signed)) ? ~rslt + 1 : rslt;
-                    /* verilator lint_on WIDTH */
+                    state[READY_BIT]: begin
+                        /* verilator lint_off WIDTH */
+                        rslt <= ((factor1[31] & factor1_is_signed ^ factor2[31] & factor2_is_signed)) ? ~rslt + 1 : rslt;
+                        /* verilator lint_on WIDTH */
 
-                    ready <= 1'b1;
-                    state <= IDLE;
-                end
+                        ready <= 1'b1;
+                        state <= IDLE;
+                    end
 
-            endcase
+                endcase
+            end
 
         end
 

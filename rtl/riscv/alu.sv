@@ -1,10 +1,11 @@
 // alu.sv
-// Copyright (c) 2022 Daniel Cliche
+// Copyright (c) 2022-2024 Daniel Cliche
 // SPDX-License-Identifier: MIT
 
 module alu(
     input  wire logic        clk,
     input  wire logic        reset_i,
+    input  wire logic        ce_i,
     input  wire logic        start_i,
     input  wire logic [31:0] in1_i,
     input  wire logic [31:0] in2_i,
@@ -22,6 +23,7 @@ module alu(
     multiplier multiplier(
         .clk(clk),
         .reset(reset_i),
+        .ce(ce_i),
         .factor1(in1_i),
         .factor2(in2_i),
         .MULop(op_i[1:0]),
@@ -37,6 +39,7 @@ module alu(
     divider divider(
         .clk(clk),
         .reset(reset_i),
+        .ce(ce_i),
         .divident(in1_i),
         .divisor(in2_i),
         .DIVop(op_i[1:0]),
@@ -57,64 +60,66 @@ module alu(
             mul_start <= 1'b0;
             div_start <= 1'b0;
         end else begin
-            case (state)
-                IDLE: begin
-                    if (start_i) begin
+            if (ce_i) begin
+                case (state)
+                    IDLE: begin
+                        if (start_i) begin
                         if (op_ext_i == 1'b0) begin
-                            case (op_i)
-                                3'b000: out_o <= op_qual_i ? in1_i - in2_i : in1_i + in2_i;                        // ADD/SUB
-                                3'b010: out_o <= ($signed(in1_i) < $signed(in2_i)) ? 32'b1 : 32'b0;                // SLT
-                                3'b011: out_o <= (in1_i < in2_i) ? 32'b1 : 32'b0;                                  // SLTU
-                                3'b100: out_o <= in1_i ^ in2_i;                                                    // XOR
-                                3'b110: out_o <= in1_i | in2_i;                                                    // OR
-                                3'b111: out_o <= in1_i & in2_i;                                                    // AND
-                                3'b001: out_o <= in1_i << in2_i[4:0];                                              // SLL
-                                3'b101: out_o <= $signed({op_qual_i ? in1_i[31] : 1'b0, in1_i}) >>> in2_i[4:0];    // SRL/SRA
-                            endcase
+                                case (op_i)
+                                    3'b000: out_o <= op_qual_i ? in1_i - in2_i : in1_i + in2_i;                        // ADD/SUB
+                                    3'b010: out_o <= ($signed(in1_i) < $signed(in2_i)) ? 32'b1 : 32'b0;                // SLT
+                                    3'b011: out_o <= (in1_i < in2_i) ? 32'b1 : 32'b0;                                  // SLTU
+                                    3'b100: out_o <= in1_i ^ in2_i;                                                    // XOR
+                                    3'b110: out_o <= in1_i | in2_i;                                                    // OR
+                                    3'b111: out_o <= in1_i & in2_i;                                                    // AND
+                                    3'b001: out_o <= in1_i << in2_i[4:0];                                              // SLL
+                                    3'b101: out_o <= $signed({op_qual_i ? in1_i[31] : 1'b0, in1_i}) >>> in2_i[4:0];    // SRL/SRA
+                                endcase
                         end else begin
-                            // extended operations
-                            case (op_i)
-                                3'b000,
-                                3'b001,
-                                3'b010,
-                                3'b011:
-                                begin
-                                    mul_start <= 1'b1;
-                                    state <= MUL;
-                                end
-                                3'b100,                         // DIV
-                                3'b101,
-                                3'b110,                          // REM
-                                3'b111:                          // REMU
-                                begin
-                                    div_start <= 1'b1;
-                                    state  <= DIV;
-                                end
-`ifndef SYNTHESIS                           
-                            default:
-                                $display("Unknown operation %d", op_i);
-`endif
-                            endcase
+                                // extended operations
+                                case (op_i)
+                                    3'b000,
+                                    3'b001,
+                                    3'b010,
+                                    3'b011:
+                                    begin
+                                        mul_start <= 1'b1;
+                                        state <= MUL;
+                                    end
+                                    3'b100,                         // DIV
+                                    3'b101,
+                                    3'b110,                          // REM
+                                    3'b111:                          // REMU
+                                    begin
+                                        div_start <= 1'b1;
+                                        state  <= DIV;
+                                    end
+    `ifndef SYNTHESIS                           
+                                default:
+                                    $display("Unknown operation %d", op_i);
+    `endif
+                                endcase
+                            end
+                        end // if start
+                    end
+                    MUL: begin
+                        if (mul_start) begin
+                            mul_start <= 1'b0;
+                        end else if (mul_done) begin
+                            out_o  <= mul_res;
+                            state  <= IDLE;
                         end
-                    end // if start
-                end
-                MUL: begin
-                    if (mul_start) begin
-                        mul_start <= 1'b0;
-                    end else if (mul_done) begin
-                        out_o  <= mul_res;
-                        state  <= IDLE;
                     end
-                end
-                DIV: begin
-                    if (div_start) begin
-                        div_start <= 1'b0;
-                    end else if (div_done) begin
-                        out_o  <= div_res;
-                        state  <= IDLE;
+                    DIV: begin
+                        if (div_start) begin
+                            div_start <= 1'b0;
+                        end else if (div_done) begin
+                            out_o  <= div_res;
+                            state  <= IDLE;
+                        end
                     end
-                end
-            endcase
+                endcase
+            end // ce
         end
     end
 
